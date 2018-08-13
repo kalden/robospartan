@@ -1,0 +1,126 @@
+<?xml version="1.0" ?>
+<argos-configuration>
+
+  <!-- ************************* -->
+  <!-- * General configuration * -->
+  <!-- ************************* -->
+  <framework>
+    <system threads="0"/>
+    <experiment length="1800"
+      ticks_per_second="10"
+      random_seed="4"/>
+  </framework>
+
+  <!-- *************** -->
+  <!-- * Controllers * -->
+  <!-- *************** -->
+  <controllers>
+    <psiswarm_dps id="psiswarm_dps"
+        library="build/controllers/psiswarm_dps/libpsiswarm_dps">
+      <actuators>
+        <psiswarm_wheels implementation="default"/>
+      </actuators>
+      <sensors>
+        <psiswarm_proximity implementation="default" show_rays="true"/>
+      </sensors>
+      <params>
+        <wheel_turning hard_turn_angle_threshold="70"
+          soft_turn_angle_threshold="25"
+          no_turn_angle_threshold="12.5"
+          max_speed="1.7" />
+          <!-- *************************************************** -->
+	        <!-- * Parameters for the task partitioning experiment * -->
+	        <!-- * Partition type: 1. NPS 2. SPS 3. DPS-S 4.  CPS  * -->
+	        <!-- * Initial travelling distance (Po in decimeters)  * -->	       
+	        <!-- * Travelling gain (G in decimeters)               * -->
+	        <!-- * Correction rate (Alpha)				                 * -->
+	        <!-- * Error type: 0. homogeneous 1. Heterogeneous     * -->
+        <!-- *************************************************** -->
+        <partitioning partition_type="4"
+          initial_partition_length="28"
+          gain="20"
+          alpha="50" 
+          epsilon="0"
+          memory_factor="0.25"
+          error_type="0" />
+      </params>
+    </psiswarm_dps>
+  </controllers>
+
+  <!-- ****************** -->
+  <!-- * Loop functions * -->
+  <!-- ****************** -->
+  <!-- * Transfer type * -->
+  <!-- * 0 - direct transfer * -->
+  <!-- * 1 - indirect transfer * -->
+  <loop_functions library="build/loop_functions/psiswarm_dps_loop_functions/libpsiswarm_dps_loop_functions"
+    label="psiswarm_dps_loop_functions" > 
+    <dps individual="Results/A/B/C/individual.csv"
+      global="Results/A/B/C/global.csv"
+      transfer_type="1"
+      home_source_distance="1.0" />
+  </loop_functions>
+
+  <!-- *********************** -->
+  <!-- * Arena configuration * -->
+  <!-- *********************** -->
+  <arena size="2.0,2.0,2" center="0,0,1">
+    <floor id="floor"
+      source="loop_functions"
+      pixels_per_meter="50" />       
+    <box id="wall_north" size="1.0,0.01,0.25" movable="false">
+      <body position="0,0.5,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_south" size="1.0,0.01,0.25" movable="false">
+      <body position="0,-0.5,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_east" size="0.01,1.0,0.25" movable="false">
+      <body position="0.5,0,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_west" size="0.01,1.0,0.25" movable="false">
+      <body position="-0.5,0,0" orientation="0,0,0"/>
+    </box>
+
+    <!-- ********** -->
+    <!-- * Robots * -->
+    <!-- ********** -->  
+    <distribute>
+      <position method="grid" center="0.2,0,0"
+        distances="0.4,0.15,0"
+        layout= "2,3,1" />
+      <orientation method="constant" values="180,0,0" />
+      <entity quantity= "6" max_trials="1">
+      <psi-swarm id="psiswarm">
+        <controller config="psiswarm_dps" />
+      </psi-swarm>
+      </entity>
+    </distribute>
+  </arena>
+
+  <!-- ******************* -->
+  <!-- * Physics engines * -->
+  <!-- ******************* -->
+  <physics_engines>
+    <dynamics2d id="dyn2d"/>
+  </physics_engines>
+
+  <!-- ********* -->
+  <!-- * Media * -->
+  <!-- ********* -->
+  <media/>
+
+  <!-- ****************** -->
+  <!-- * Visualization * -->
+  <!-- ****************** -->
+  <visualization>
+    <qt-opengl>
+      <camera>
+        <placement idx="0"
+          position="0,0,1.25"
+          look_at="0,0,0"
+          lens_focal_length="20" />
+      </camera>
+      <user_functions label="psiswarm_dps_qt_user_functions" />
+    </qt-opengl>
+  </visualization> 
+</argos-configuration>
