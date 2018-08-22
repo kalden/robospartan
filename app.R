@@ -11,6 +11,10 @@ library(shiny)
 library(shinyjs)
 library(DT)
 library(spartan)
+library(DBI)
+library(RMySQL)
+source("/home/kja505/Documents/spartanDB/R/generate_parameter_sample_in_db.R")
+source("/home/kja505/Documents/spartanDB/R/database_utilities.R")
 parameters<-c()
 mins<-c()
 maxs<-c()
@@ -43,11 +47,11 @@ ui <- fluidPage(
                     label = "Parameter:",
                     value = ""),
           
-          textInput(inputId = "min",
+          numericInput(inputId = "min",
                     label = "Minimum:",
                     value = ""),
           
-          textInput(inputId = "max",
+          numericInput(inputId = "max",
                     label = "Maximum:",
                     value = ""),
           
@@ -83,18 +87,25 @@ ui <- fluidPage(
                      choices = c("normal","optimal"))
       ),
       
-      actionButton(inputId = "createSample",
+       actionButton(inputId = "createSample",
                    label = 'Create Sample'),
-      br(),
+        br(),
       
-      actionButton(inputId = "createARGoSFiles",
+        actionButton(inputId = "createARGoSFiles",
                    label = 'Create ARGoS Files'),
-      br(),
+        br(),
       
-      actionButton(inputId = "addToDB",
-                   label = 'Add Experiment to Database')
+      wellPanel(
+        
+        textInput(inputId = "description",
+                  label = "Experiment Description:",
+                  value = ""),
+        
+        actionButton(inputId = "addToDB",
+                  label = 'Add Experiment to Database')
+      ),
       
-      ,width = 5),
+      width = 5),
       
       # Show a plot of the generated distribution
       mainPanel(
@@ -119,7 +130,7 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
   
-  
+  #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
     
@@ -130,14 +141,7 @@ server <- function(input, output, session) {
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
   
-  # New plot title
-  #new_plot_title <- eventReactive(
-  #  eventExpr = input$update_plot_title, 
-  #  valueExpr = { toTitleCase(input$plot_title) },
-  #  ignoreNULL = FALSE
-  #)
-  
-  # Download file
+  # Download generated sample
   output$lhc_sample <- downloadHandler(
     filename = function() {
       paste0("lhc_sample.csv")
@@ -147,34 +151,71 @@ server <- function(input, output, session) {
       }
   )
   
+  #### Action when Create Sample is pressed
   observeEvent(
     input$createSample,
     {
-      #print(parameters)
-      #print(mins)
-      #print(maxs)
-      myValues$sample<<-lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
-      myValues$sampleGenerated<<-TRUE
+      if(is.integer(input$numSamples))
+      {
+        myValues$sample<<-lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
+        myValues$sampleGenerated<<-TRUE
+        
+        #print(head(myValues$sample))
+        output$sample_header <- renderUI({ h4("Generated Sample:") })
+        output$sample <- DT::renderDataTable(
+          DT::datatable(data = myValues$sample, 
+                        options = list(pageLength = 10, searching=FALSE), 
+                        rownames = FALSE))
+      }
+      else
+      {
+        showModal(modalDialog(
+          title = "Incorrect number of samples",
+          "Number of samples should be numeric"))
+      }
       
-      #print(head(myValues$sample))
-
     }
   )
   
+  #### Action when Add to Database is Pressed
   observeEvent(
-    input$createSample,
+    input$addToDB,
     {
-      
-      print(head(myValues$sample))
-      output$sample_header <- renderUI({ h4("Generated Sample:") })
-      output$sample <- DT::renderDataTable(
-        DT::datatable(data = myValues$sample, 
-                      options = list(pageLength = 10, searching=FALSE), 
-                      rownames = FALSE))
+      if(!is.null(myValues$sample))
+      {
+        if(input$description!="")
+        {
+          rmysql.settingsfile<-"/home/kja505/Documents/sql_settings/newspaper_search_results.cnf"
+          rmysql.db<-"spartan_ppsim"
+          dblink<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
+          experiment_id <- setup_experiment(dblink,"LHC","2018-08-22","robospartan test sample 3")
+        
+          add_parameter_set_to_database(dblink, myValues$sample,experiment_id)
+        
+          showModal(modalDialog(
+            title = "Important message",
+            paste("Experiment ID: ",experiment_id,sep="")))
+        }
+        else
+        {
+          print(is.null(myValues$sample))
+          showModal(modalDialog(
+            title = "No Experiment Description",
+            "You need to enter a description of this experiment for storage in the database"))
+        }
+      }
+      else
+      {
+        showModal(modalDialog(
+          title = "No Sample Generated",
+          "You need to generate a sample before one can be added to a experiment database"))
+      }
       
     }
   )
   
+  
+  #### Action when Clear Parameter is pressed
   observeEvent(
     input$clearParameter,
     {
@@ -182,51 +223,69 @@ server <- function(input, output, session) {
       mins<<-c()
       maxs<<-c()
       myValues$sampleGenerated<-FALSE
-      print(parameters)
-      print(mins)
-      print(maxs)
+    
       myValues$table<-NULL
       updateTextInput(session, "parameter", value = "")     
       updateTextInput(session, "min", value = "")
       updateTextInput(session, "max", value = "")
+      # Need to clear the generated sample to:
+      if(!is.null(myValues$sample))
+      {
+        myValues$sample<-NULL
+        output$sample_header <- renderUI({ "" })
+        output$sample <- NULL
+        myValues$sampleGenerated<-FALSE
+      }
     }
   )
   
+  #### Action when Add Parameter is pressed
   observeEvent(
     input$addParameter,
     {
     if(input$addParameter > 0){
-      if(input$parameter != "" && input$min!="" && input$max!="")
+  
+      if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max))
       {
-        print(paste(input$parameter,input$min,input$max))
-        parameter<-isolate(input$parameter)
-        min<-isolate(input$min)
-        max<-isolate(input$max)
-        #myValues$params <- c(isolate(myValues$params), parameter)
-        parameters<<-c(parameters,parameter)
-        print(parameters)
-        mins<<-c(mins,as.numeric(min))
-        maxs<<-c(maxs,as.numeric(max))
-        print(mins)
-        print(maxs)
-        #myValues$mins <- c(isolate(myValues$mins), min)
-        #myValues$maxs <- c(isolate(myValues$maxs), max)
-        #myValues$mins <- c(isolate(myValues$mins), isolate(input$min))
-        #myValues$maxs <- c(isolate(myValues$maxs), isolate(input$max))
-        #myValues$table <- rbind(isolate(myValues$table), cbind(isolate(input$parameter),isolate(input$min),isolate(input$max)))
-        myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max))
-        #print(myValues$table)
-        #print(myValues$params)
-        #print(myValues$mins)
-        #print(myValues$maxs)
-        updateTextInput(session, "parameter", value = "")     
+        if(input$min < input$max)
+        {
+          parameter<-isolate(input$parameter)
+          min<-isolate(input$min)
+          max<-isolate(input$max)
+          
+          parameters<<-c(parameters,parameter)
+          
+          mins<<-c(mins,as.numeric(min))
+          maxs<<-c(maxs,as.numeric(max))
+          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max))
+  
+          updateTextInput(session, "parameter", value = "")     
+          updateTextInput(session, "min", value = "")
+          updateTextInput(session, "max", value = "")
+        }
+        else
+        {
+          updateTextInput(session, "min", value = "")
+          updateTextInput(session, "max", value = "")
+          showModal(modalDialog(
+            title = "Error in Range",
+            "Minimum of the sampling range needs to be less than the maximum"))
+        }
+      }
+      else
+      {
+        # Either parameter is blank, or min/max are not numeric
         updateTextInput(session, "min", value = "")
         updateTextInput(session, "max", value = "")
+        showModal(modalDialog(
+          title = "Error in Input",
+          "Either parameter name is blank, or minimum or maximum are not numeric"))
       }
     }
       }
   )
  
+  #### Render the parameter table each time the add parameter button is pressed
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
     {
@@ -236,23 +295,13 @@ server <- function(input, output, session) {
     
   })
   
+  #### Change the parameter table header when a sample is generated
     output$table_header <- renderUI({
     if(length(myValues$table)>1)
     {
       h4("Parameters Declared:")
     }
   })
-
-  
-  
-   #output$distPlot <- renderPlot({
-  #    # generate bins based on input$bins from ui.R
-  #    x    <- faithful[, 2] 
-  #    bins <- seq(min(x), max(x), length.out = input$bins + 1)
-      
-      # draw the histogram with the specified number of bins
-  #    hist(x, breaks = bins, col = 'darkgray', border = 'white')
-  # })
 }
 
 # Run the application 

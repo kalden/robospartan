@@ -12,7 +12,7 @@ do
 	# KA: expName can be set in the cluster script generator
 	perl -i -pe 's|(let expName)=.*? #|$1='"$i"' #|g' Samples_LHA.sh # Change seed
 
-	# Swarm size modifies parameter in distribute tags
+	# Swarm size modifies entity parameter in distribute tags
 	perl -i -pe 's|(swarmSize)=.*? #|$1='"${dataArray[$j]}"' #|g' Samples_LHA.sh # Change seed
         let j=$j+1
 
