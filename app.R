@@ -6,15 +6,15 @@
 #
 #    http://shiny.rstudio.com/
 #
-
 library(shiny)
 library(shinyjs)
 library(DT)
 library(spartan)
 library(DBI)
 library(RMySQL)
-source("/home/kja505/Documents/spartanDB/R/generate_parameter_sample_in_db.R")
-source("/home/kja505/Documents/spartanDB/R/database_utilities.R")
+library(readr) #Required for wrtie_csv on MacOS
+#source("/home/kja505/Documents/spartanDB/R/generate_parameter_sample_in_db.R")
+#source("/home/kja505/Documents/spartanDB/R/database_utilities.R")
 parameters<-c()
 mins<-c()
 maxs<-c()
@@ -26,7 +26,7 @@ ui <- fluidPage(
   useShinyjs(),
   
    # Application title
-   h3("Generate Parameter Sets using Latin-Hypercube Sampling"),
+   h3("Generate Parameter Sets using different sampling techniques"),
    
    # LHC: Parameters
    # Number of Samples
@@ -41,6 +41,11 @@ ui <- fluidPage(
         
         wellPanel(
           
+          h4("Analysis Technique:"),
+          selectInput(inputId = "analysisType",
+                      label = NULL,
+                      choices = c("Latin-Hypercube","Robustness", "eFAST")),
+          
           h4("Declare Parameters:"),
           
           textInput(inputId = "parameter",
@@ -54,6 +59,14 @@ ui <- fluidPage(
           numericInput(inputId = "max",
                     label = "Maximum:",
                     value = ""),
+          
+          numericInput(inputId = "robustnessIncrement",
+                       label = "Increment",
+                       value = ""),
+          
+          numericInput(inputId = "baseline",
+                       label = "Calibrated Baseline",
+                       value = ""),
           
           #,textInput('txt','','Text')
           actionButton(inputId = "addParameter",
@@ -82,9 +95,14 @@ ui <- fluidPage(
                       label = "Number of Samples",
                       value = 500),
          
+         numericInput(inputId = "numCurves",
+                      label = "Number of Curves",
+                      value = 1),
+         
          selectInput(inputId = "algorithm",
                      label = "Sampling Algorithm",
                      choices = c("normal","optimal"))
+         
       ),
       
        actionButton(inputId = "createSample",
@@ -130,16 +148,48 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
   
+  myValues <- reactiveValues()
+  myValues$sampleGenerated<-FALSE
+  shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
+    shinyjs::show("robustnessIncrement")
     
     if(myValues$sampleGenerated==TRUE)
       shinyjs::show("lhc_sample")
   })
-
-  myValues <- reactiveValues()
-  myValues$sampleGenerated<-FALSE
+ 
+  observeEvent(
+    input$analysisType,
+    {   
+        print(input$analysisType)
+        #Robustness analysis technique - parameter requires param, min, max and increment. No settings required.
+        if(input$analysisType == "Robustness"){
+          shinyjs::show("robustnessIncrement")
+          shinyjs::hide("numSamples")
+          shinyjs::hide("algorithm")
+          shinyjs::hide("numCurves") 
+          shinyjs::show("baseline")
+        }  
+        #Latin-Hypercube analysis technique - parameter requires param, min, max. Settings are sample number and algorithm type.
+        else if(input$analysisType == "Latin-Hypercube"){
+          shinyjs::hide("robustnessIncrement")
+          shinyjs::show("numSamples")
+          shinyjs::show("algorithm")
+          shinyjs::hide("numCurves") 
+          shinyjs::hide("baseline")
+        }  
+        #eFAST analysis technique - parameter requires requires param, min, max. Settings require additional 
+        else{
+          shinyjs::hide("robustnessIncrement")
+          shinyjs::show("numSamples")
+          shinyjs::hide("algorithm")
+          shinyjs::show("numCurves") 
+          shinyjs::hide("baseline")
+          
+        } 
+    })
   
   # Download generated sample
   output$lhc_sample <- downloadHandler(
@@ -155,9 +205,9 @@ server <- function(input, output, session) {
   observeEvent(
     input$createSample,
     {
-      if(is.integer(input$numSamples))
+      if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
-        myValues$sample<<-lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
+        myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
         myValues$sampleGenerated<<-TRUE
         
         #print(head(myValues$sample))
@@ -167,7 +217,19 @@ server <- function(input, output, session) {
                         options = list(pageLength = 10, searching=FALSE), 
                         rownames = FALSE))
       }
-      else
+      
+      else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
+      {
+        print("eFAST can work")
+      }
+      
+      else if(input$analysisType == "Robustness")
+      {
+        myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, input$baseline, mins, maxs, input$robustnessIncrement, write_csv = FALSE, return_sample = TRUE)
+        print("Robustness can work")
+      }  
+      
+      else #this case gets called when latin-hypercube or eFAST have incorrect number of samples
       {
         showModal(modalDialog(
           title = "Incorrect number of samples",
@@ -219,6 +281,7 @@ server <- function(input, output, session) {
   observeEvent(
     input$clearParameter,
     {
+      shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
       parameters<<-c()
       mins<<-c()
       maxs<<-c()
@@ -262,6 +325,9 @@ server <- function(input, output, session) {
           updateTextInput(session, "parameter", value = "")     
           updateTextInput(session, "min", value = "")
           updateTextInput(session, "max", value = "")
+          
+          shinyjs::show("createSample") #Allow the user to click the show sample button
+          
         }
         else
         {
