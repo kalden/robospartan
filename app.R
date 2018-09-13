@@ -18,6 +18,9 @@ library(readr) #Required for wrtie_csv on MacOS
 parameters<-c()
 mins<-c()
 maxs<-c()
+baselines<-c()
+increments<-c()
+curves<-c()
 
 
 # Define UI for application that draws a histogram
@@ -26,7 +29,7 @@ ui <- fluidPage(
   useShinyjs(),
   
    # Application title
-   h3("Generate Parameter Sets using different sampling techniques"),
+   h3("Generate Parameter Sets Using Different Sampling Techniques"),
    
    # LHC: Parameters
    # Number of Samples
@@ -50,7 +53,7 @@ ui <- fluidPage(
           
           textInput(inputId = "parameter",
                     label = "Parameter:",
-                    value = ""),
+                    value = "a"),
           
           numericInput(inputId = "min",
                     label = "Minimum:",
@@ -93,7 +96,7 @@ ui <- fluidPage(
          
          numericInput(inputId = "numSamples",
                       label = "Number of Samples",
-                      value = 500),
+                      value = 65),
          
          numericInput(inputId = "numCurves",
                       label = "Number of Curves",
@@ -154,7 +157,6 @@ server <- function(input, output, session) {
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
-    shinyjs::show("robustnessIncrement")
     
     if(myValues$sampleGenerated==TRUE)
       shinyjs::show("lhc_sample")
@@ -171,6 +173,7 @@ server <- function(input, output, session) {
           shinyjs::hide("algorithm")
           shinyjs::hide("numCurves") 
           shinyjs::show("baseline")
+          
         }  
         #Latin-Hypercube analysis technique - parameter requires param, min, max. Settings are sample number and algorithm type.
         else if(input$analysisType == "Latin-Hypercube"){
@@ -187,17 +190,17 @@ server <- function(input, output, session) {
           shinyjs::hide("algorithm")
           shinyjs::show("numCurves") 
           shinyjs::hide("baseline")
-          
         } 
     })
   
   # Download generated sample
   output$lhc_sample <- downloadHandler(
     filename = function() {
-      paste0("lhc_sample.csv")
+      paste0(input$analysisType,".csv")
     },
     content = function(file) { 
-      write_csv(data.frame(myValues$sample), path = file) 
+      colnames(result) <- columnNames
+      write_csv(data.frame(result), path = file) 
       }
   )
   
@@ -205,28 +208,55 @@ server <- function(input, output, session) {
   observeEvent(
     input$createSample,
     {
+      result <<- NULL
       if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
         myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
         myValues$sampleGenerated<<-TRUE
-        
-        #print(head(myValues$sample))
+        columnNames <<- c(parameters)
         output$sample_header <- renderUI({ h4("Generated Sample:") })
         output$sample <- DT::renderDataTable(
           DT::datatable(data = myValues$sample, 
                         options = list(pageLength = 10, searching=FALSE), 
-                        rownames = FALSE))
+                        rownames = FALSE, colnames = columnNames))
+        result<<-myValues$sample #required when the user wishes to download the analysis
       }
       
       else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
       {
+        myValues$sample <<- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, parameters, mins, maxs, write_csv = FALSE, return_sample = TRUE)
+        myValues$sampleGenerated<<-TRUE
         print("eFAST can work")
-      }
-      
+        
+        for(param in 1:length(parameters)) #iterate through each parameter chosen
+        {
+          for(c in 1:input$numCurves) #iterate for the number of curves chosen 
+          {  
+            result <<- rbind(result, cbind(myValues$sample[,  , param,c], parameters[param], c))
+          }
+        }
+        columnNames <<- c(parameters, "Parameter of Interest", "Curve")
+        output$sample_header <- renderUI({ h4("Generated Sample:") })
+        output$sample <- DT::renderDataTable(
+          DT::datatable(data = result,
+                        options = list(pageLength = 10, searching=FALSE),
+                        rownames = FALSE, colnames = columnNames))
+       }
+       
       else if(input$analysisType == "Robustness")
       {
-        myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, input$baseline, mins, maxs, input$robustnessIncrement, write_csv = FALSE, return_sample = TRUE)
-        print("Robustness can work")
+        myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, baselines, mins, maxs, increments, write_csv = FALSE, return_sample = TRUE)
+        myValues$sampleGenerated<<-TRUE
+        for(param in 1:length(myValues$sample))
+        {
+          result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
+        }
+        columnNames <<- c(parameters, "Parameter of Interest")
+        output$sample_header <- renderUI({ h4("Generated Sample:") })
+        output$sample <- DT::renderDataTable(
+          DT::datatable(data = result,
+                        options = list(pageLength = 10, searching=FALSE),
+                        rownames = FALSE, colnames = columnNames))
       }  
       
       else #this case gets called when latin-hypercube or eFAST have incorrect number of samples
@@ -285,12 +315,16 @@ server <- function(input, output, session) {
       parameters<<-c()
       mins<<-c()
       maxs<<-c()
+      increments<<-c()
+      baselines<<-c()
       myValues$sampleGenerated<-FALSE
     
       myValues$table<-NULL
       updateTextInput(session, "parameter", value = "")     
       updateTextInput(session, "min", value = "")
       updateTextInput(session, "max", value = "")
+      updateTextInput(session, "baseline", value = "")
+      updateTextInput(session, "robustnessIncrement", value = "")
       # Need to clear the generated sample to:
       if(!is.null(myValues$sample))
       {
@@ -317,14 +351,31 @@ server <- function(input, output, session) {
           max<-isolate(input$max)
           
           parameters<<-c(parameters,parameter)
+
+  
+          if (input$analysisType != "Robustness")
+          {
+            baseline <- "N/A"
+            increment <- "N/A"
+          }
+          else 
+          {
+            baseline <- isolate(input$baseline)
+            increment <- isolate(input$robustnessIncrement)
+          }
           
           mins<<-c(mins,as.numeric(min))
           maxs<<-c(maxs,as.numeric(max))
-          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max))
+          baselines<<-c(baselines,as.numeric(baseline))
+          increments<<-c(increments, as.numeric(increment))
+          
+          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max,increment,baseline))
   
           updateTextInput(session, "parameter", value = "")     
           updateTextInput(session, "min", value = "")
           updateTextInput(session, "max", value = "")
+          updateTextInput(session, "baseline", value = "")
+          updateTextInput(session, "robustnessIncrement", value = "")
           
           shinyjs::show("createSample") #Allow the user to click the show sample button
           
@@ -355,7 +406,7 @@ server <- function(input, output, session) {
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
     {
-      colnames(myValues$table) <- c("Parameter","Min","Max")
+      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline" )
       myValues$table
     }
     
@@ -365,7 +416,7 @@ server <- function(input, output, session) {
     output$table_header <- renderUI({
     if(length(myValues$table)>1)
     {
-      h4("Parameters Declared:")
+      h4("Parameters Declared For", input$analysisType, ":")
     }
   })
 }
