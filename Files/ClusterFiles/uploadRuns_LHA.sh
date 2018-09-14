@@ -4,10 +4,11 @@ source retrieveData_LHA.sh .
 
 retrieveData
 
-samplesNumber=1000
-j=2001
+samplesNumber=1
+#j=2001
 
-for ((i= 501; i <= $samplesNumber; i = i + 1))
+#for ((i= 501; i <= $samplesNumber; i = i + 1))
+for ((i= 1; i <= $samplesNumber; i = i + 1))
 do
 	# KA: expName can be set in the cluster script generator
 	perl -i -pe 's|(let expName)=.*? #|$1='"$i"' #|g' Samples_LHA.sh # Change seed
@@ -32,5 +33,5 @@ do
 	perl -i -pe 's|(let memFac)=.*? #|$1='"${dataArray[$j]}"' #|g' Samples_LHA.sh
 	let j=$j+1
 
-	qsub Samples_LHA.sh
+	./Samples_LHA.sh
 done

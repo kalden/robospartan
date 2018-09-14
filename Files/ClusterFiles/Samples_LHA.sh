@@ -24,10 +24,11 @@ function float_eval()
 }
 
 fileFolder=CPS_SA_Hom #
-let expName=1000 #
+let expName=1 #
 
 let simulationLength=54000 #
-let randomSeed=${SGE_TASK_ID}
+#let randomSeed=${SGE_TASK_ID}
+let randomSeed=1
 
 let partType=4  # 1 - NPS, 2 - SPS, 3 - DPS, 4 - CPS
 let errorType=0 # 0 - Homogeneous, 1 - Heterogeneous
@@ -37,11 +38,11 @@ let initialP=67 # Initial partition length
 let gain=80 # Gain 
 let alpha=50 # Alpha
 # CPS
-let epsilon=8 # Epsilon
-let memFac=24 # Memory factor
+let epsilon=2 # Epsilon
+let memFac=3 # Memory factor
 # Loop function 
 let transferType=1 # 0 - Direct transfer, 1 - Indirect transfer
-homeSourceDistance=1.8 #
+homeSourceDistance=1 #
 homeSourceDistance=$(float_eval "$homeSourceDistance+0.3")
 # Arena size
 width=$(float_eval "$homeSourceDistance+1.0")
@@ -53,23 +54,24 @@ wallPosWidth=$(float_eval "($homeSourceDistance+0.3)/2")
 #wallPosHeigth=$(float_eval "($homeSourceDistance+0.9)/2")
 wallPosHeigth="1.1"
 # Robots
-swarmSize=12 #
+swarmSize= #
 centerPos=$(float_eval "($homeSourceDistance-0.3)/2+0.05")
 #centerPos="0.55"
 distancePos=$(float_eval "$centerPos*2.0")
 
 
-if [ -d /scratch/ebb505/$fileFolder ]
-	then echo "Directory exists"
-	else mkdir /scratch/ebb505/$fileFolder
-fi
+#if [ -d /scratch/ebb505/$fileFolder ]
+#	then echo "Directory exists"
+#	else mkdir /scratch/ebb505/$fileFolder
+#fi
+#
+#if [ -d /scratch/ebb505/$fileFolder/$expName ]
+#	then echo "Directory exists"
+#	else mkdir /scratch/ebb505/$fileFolder/$expName 
+#fi
 
-if [ -d /scratch/ebb505/$fileFolder/$expName ]
-	then echo "Directory exists"
-	else mkdir /scratch/ebb505/$fileFolder/$expName 
-fi
-
-fileName=$fileFolder$expName$randomSeed
+fileName="robospartan_test"
+#fileName=$fileFolder$expName$randomSeed
 
 echo -e "<?xml version=\"1.0\" ?>"  >> experiments/$fileName.argos
 echo -e "<argos-configuration>"  >> experiments/$fileName.argos
@@ -161,12 +163,12 @@ echo -e " <media/>"  >> experiments/$fileName.argos
 # echo -e " </visualization>"  >> experiments/$fileName.argos#
 echo -e "</argos-configuration>"  >> experiments/$fileName.argos
 
-mkdir /scratch/ebb505/$fileFolder/$expName/$randomSeed
-cp experiments/$fileName.argos /scratch/ebb505/$fileFolder/$expName/$randomSeed
+#mkdir /scratch/ebb505/$fileFolder/$expName/$randomSeed
+#cp experiments/$fileName.argos /scratch/ebb505/$fileFolder/$expName/$randomSeed
 
-export LD_LIBRARY_PATH=/scratch/ebb505/code/ArgosProgram_38/lib/argos3/:$LD_LIBRARY_PATH
-export PKG_CONFIG_PATH=/scratch/ebb505/code/ArgosProgram_38/lib/pkgconfig/:$PKG_CONFIG_PATH
-export PATH=/scratch/ebb505/code/ArgosProgram_38/bin:$PATH
+#export LD_LIBRARY_PATH=/scratch/ebb505/code/ArgosProgram_38/lib/argos3/:$LD_LIBRARY_PATH
+#export PKG_CONFIG_PATH=/scratch/ebb505/code/ArgosProgram_38/lib/pkgconfig/:$PKG_CONFIG_PATH
+#export PATH=/scratch/ebb505/code/ArgosProgram_38/bin:$PATH
 
-argos3 -c experiments/$fileName.argos
-rm -r experiments/$fileName.argos
+#argos3 -c experiments/$fileName.argos
+#rm -r experiments/$fileName.argos
