@@ -277,7 +277,7 @@ server <- function(input, output, session) {
       {
         if(input$description!="")
         {
-          rmysql.settingsfile<-"/home/kja505/Documents/sql_settings/newspaper_search_results.cnf"
+          rmysql.settingsfile<-"/Users/finlay/robospartan/databaseSpartan.cnf"
           rmysql.db<-"spartan_ppsim"
           dblink<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
           experiment_id <- setup_experiment(dblink,"LHC","2018-08-22","robospartan test sample 3")
@@ -341,8 +341,16 @@ server <- function(input, output, session) {
     input$addParameter,
     {
     if(input$addParameter > 0){
-  
-      if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max))
+      inputTest <- list(input$min, input$max)
+      positiveNumber <<- TRUE
+      for(positiveTest in 1:length(inputTest)) #checking the min and max values are positive numbers
+      { 
+        if (inputTest[positiveTest] < 0)
+        {  
+          positiveNumber <<- FALSE  
+        } 
+      }
+      if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max) && positiveNumber == TRUE)
       {
         if(input$min < input$max)
         {
@@ -391,12 +399,12 @@ server <- function(input, output, session) {
       }
       else
       {
-        # Either parameter is blank, or min/max are not numeric
+        # Either parameter is blank, or min/max are not numeric, or value is negative
         updateTextInput(session, "min", value = "")
         updateTextInput(session, "max", value = "")
         showModal(modalDialog(
           title = "Error in Input",
-          "Either parameter name is blank, or minimum or maximum are not numeric"))
+          "Either parameter name is blank, minimum or maximum are not numeric, or a value is negative"))
       }
     }
       }
