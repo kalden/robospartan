@@ -13,8 +13,7 @@ library(spartan)
 library(DBI)
 library(RMySQL)
 library(readr) #Required for wrtie_csv on MacOS
-#source("/home/kja505/Documents/spartanDB/R/generate_parameter_sample_in_db.R")
-#source("/home/kja505/Documents/spartanDB/R/database_utilities.R")
+source("/home/fgch500/robospartan/modify_argos_xml.R")
 parameters<-c()
 mins<-c()
 maxs<-c()
@@ -154,6 +153,7 @@ server <- function(input, output, session) {
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
+  shinyjs::hide("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
@@ -204,22 +204,33 @@ server <- function(input, output, session) {
       }
   )
   
+  #Modify ARGoS files
+  observeEvent(input$createARGoSFiles,  
+     {
+       zipLocation <- "argosFilesZip/ARGoSFilesZip"
+       directory <- "/home/fgch500/robospartan/argosFiles/"
+       make_argos_file_from_sample("/home/fgch500/robospartan/psiswarm_dps.argos", directory, parameters, result, zipLocation)
+       
+     } 
+  )
+      
   #### Action when Create Sample is pressed
   observeEvent(
     input$createSample,
     {
       result <<- NULL
+      shinyjs::show("createARGoSFiles") #allow the user to create argos files using the sample results 
       if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
         myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
         myValues$sampleGenerated<<-TRUE
         columnNames <<- c(parameters)
+        result<<-myValues$sample #required when the user wishes to download the analysis
         output$sample_header <- renderUI({ h4("Generated Sample:") })
         output$sample <- DT::renderDataTable(
-          DT::datatable(data = myValues$sample, 
+          DT::datatable(data = result, 
                         options = list(pageLength = 10, searching=FALSE), 
                         rownames = FALSE, colnames = columnNames))
-        result<<-myValues$sample #required when the user wishes to download the analysis
       }
       
       else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
@@ -264,6 +275,8 @@ server <- function(input, output, session) {
         showModal(modalDialog(
           title = "Incorrect number of samples",
           "Number of samples should be numeric"))
+        shinyjs::hide("createARGoSFiles") 
+        
       }
       
     }
@@ -312,6 +325,8 @@ server <- function(input, output, session) {
     input$clearParameter,
     {
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
+      shinyjs::hide("createARGoSFiles") 
+
       parameters<<-c()
       mins<<-c()
       maxs<<-c()
