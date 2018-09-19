@@ -8,6 +8,7 @@
 # memFac : Can modify OK
 
 library(xml2)
+library(shinycssloaders)
 
 #' Recursively search the XML file for the tag attributes that are being changed
 #' @param child_nodes Current set of child nodes being examined
@@ -44,6 +45,7 @@ search_child_nodes_and_set_attribute<-function(child_nodes, attribute_name,attri
 #' @param generated_sample Sample of parameter values to insert into XML files
 make_argos_file_from_sample<-function(argos_file_path, output_folder, parameters, generated_sample, zipLocation)
 {
+  file.remove(paste0(zipLocation,".zip")) #Delete previous zip folder if there is one
   for(s in 1:nrow(generated_sample))
   {
     argos_file <- read_xml(argos_file_path)
@@ -51,21 +53,22 @@ make_argos_file_from_sample<-function(argos_file_path, output_folder, parameters
     for(param in 1:length(parameters))
     {
       child_nodes<-xml_children(argos_file)
-      search_child_nodes_and_set_attribute(child_nodes,parameters[param], values[s,param])
+      search_child_nodes_and_set_attribute(child_nodes,parameters[param], generated_sample[s,param])
     }
     
     # Write out the XML file
     write_xml(argos_file,file.path(output_folder,paste("argos_experiment_set_",s,".argos",sep="")),options="format")
     
   }
-  
   zip(zipfile = zipLocation, dir(file.path(output_folder), full.names = TRUE))
   showModal(modalDialog(
     title = "Zip File Created",
     "A Zip file of ARGoS files has been created at:       ", zipLocation))
-  for(s in 1:nrow(generated_sample)) #Remove all XML files once they've been zipped
-  {
-    file.remove(file.path(output_folder, paste0("argos_experiment_set_",s,".argos")))
-  }
+  
+  # for(s in 1:nrow(generated_sample)) #Remove all XML files once they've been zipped
+  # {
+  #   file.remove(file.path(output_folder, paste0("argos_experiment_set_",s,".argos")))
+  # }
+  # 
   
 }

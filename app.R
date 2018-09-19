@@ -13,6 +13,8 @@ library(spartan)
 library(DBI)
 library(RMySQL)
 library(readr) #Required for wrtie_csv on MacOS
+library(spartanDB)
+
 source("/home/fgch500/robospartan/modify_argos_xml.R")
 parameters<-c()
 mins<-c()
@@ -20,7 +22,7 @@ maxs<-c()
 baselines<-c()
 increments<-c()
 curves<-c()
-
+directory <- ""
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -75,19 +77,9 @@ ui <- fluidPage(
                         label = 'Add Parameter'),
           actionButton(inputId = "clearParameter",
                        label = 'Clear All')
-          #,textOutput('list'),
           
-          #actionButton(inputId = "addParameter2",
-          #             label = "Add Parameter2")
         ),
         
-        #wellPanel(
-        #  
-        #  htmlOutput("table_header2"),
-        #  div(tableOutput("parameter_table2"),style="font-size:90%")
-        #),
-         
-        #htmlOutput("parameter_list"),
         
        wellPanel(
          
@@ -103,19 +95,36 @@ ui <- fluidPage(
          
          selectInput(inputId = "algorithm",
                      label = "Sampling Algorithm",
-                     choices = c("normal","optimal"))
-         
-      ),
-      
-       actionButton(inputId = "createSample",
+                     choices = c("normal","optimal")),
+
+         actionButton(inputId = "createSample",
                    label = 'Create Sample'),
-        br(),
-      
-        actionButton(inputId = "createARGoSFiles",
-                   label = 'Create ARGoS Files'),
-        br(),
+         hr(),
+          
+         fileInput(inputId = "argosFiles",
+                   label = "Argos File To Modify:"),
+         
+         actionButton(inputId = "createARGoSFiles",
+                   label = 'Modify ARGoS Files'),
+         
+         actionButton(inputId = "cluster",
+                      label = "Add to Cluster")
+       ),
       
       wellPanel(
+        
+        h4("Database:"),
+      
+        fileInput(inputId = "DBSettings",
+                  label = "Database Settings File:"),
+        
+        actionButton(inputId = "createDB",
+                     label = "Make Database"),
+        
+        actionButton(inputId = "deleteDB",
+                     label = "Delete Database"),
+        
+        br(), br(),
         
         textInput(inputId = "description",
                   label = "Experiment Description:",
@@ -123,6 +132,8 @@ ui <- fluidPage(
         
         actionButton(inputId = "addToDB",
                   label = 'Add Experiment to Database')
+        
+        
       ),
       
       width = 5),
@@ -147,13 +158,16 @@ ui <- fluidPage(
    
 )
 
-# Define server logic required to draw a histogram
+# Define server logic 
 server <- function(input, output, session) {
   
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
   shinyjs::hide("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
+  shinyjs::hide("addToDB")
+  shinyjs::hide("createDB")
+  shinyjs::hide("cluster")
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
@@ -165,7 +179,7 @@ server <- function(input, output, session) {
   observeEvent(
     input$analysisType,
     {   
-        print(input$analysisType)
+        print(input$ analysisType)
         #Robustness analysis technique - parameter requires param, min, max and increment. No settings required.
         if(input$analysisType == "Robustness"){
           shinyjs::show("robustnessIncrement")
@@ -173,7 +187,6 @@ server <- function(input, output, session) {
           shinyjs::hide("algorithm")
           shinyjs::hide("numCurves") 
           shinyjs::show("baseline")
-          
         }  
         #Latin-Hypercube analysis technique - parameter requires param, min, max. Settings are sample number and algorithm type.
         else if(input$analysisType == "Latin-Hypercube"){
@@ -207,10 +220,21 @@ server <- function(input, output, session) {
   #Modify ARGoS files
   observeEvent(input$createARGoSFiles,  
      {
-       zipLocation <- "argosFilesZip/ARGoSFilesZip"
-       directory <- "/home/fgch500/robospartan/argosFiles/"
-       make_argos_file_from_sample("/home/fgch500/robospartan/psiswarm_dps.argos", directory, parameters, result, zipLocation)
-       
+      if (!is.null(input$argosFiles$datapath)){
+         directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
+         zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go 
+         filesToModify <- input$argosFiles$datapath
+         showModal(modalDialog(
+           title = "Creating ARGoS Files",
+           "ARGoS files are being created..."))
+         make_argos_file_from_sample(filesToModify, directory, parameters, result, zipLocation)
+         shinyjs::show("cluster")
+      }
+      else {
+        showModal(modalDialog(
+          title = "No ARGoS file found",
+          "PLease select an ARGoS file to modify"))
+      }
      } 
   )
       
@@ -219,6 +243,7 @@ server <- function(input, output, session) {
     input$createSample,
     {
       result <<- NULL
+      measures <<- c("Velocity", "Displacement")
       shinyjs::show("createARGoSFiles") #allow the user to create argos files using the sample results 
       if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
@@ -278,10 +303,44 @@ server <- function(input, output, session) {
         shinyjs::hide("createARGoSFiles") 
         
       }
-      
     }
   )
+
+  observeEvent(
+    input$DBSettings,
+    {
+      rmysql.settingsfile<-input$DBSettings$datapath #Use the user's selected datapath
+      rmysql.db<-"spartan_ppsim"
+      dblink<<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
+      shinyjs::show("addToDB")
+      shinyjs::show("createDB")
+    })
   
+  #Write a bash script to send the simulation to the cluster
+  observeEvent(
+    input$cluster, 
+    {
+      sink("lhc_cluster_argos.bash")
+      cat("#$-S /bin/bash", "\n")
+      cat("#$-cwd", "\n")
+      cat(paste0("#$-t 1-",input$numSamples), "\n")
+      cat("#$-l h_vmen=8G", "\n")
+      cat("#$-l h_rt=23:59:59", "\n", "\n")
+      cat(paste0("parameterFilePath = '",directory, "'"), "\n", "\n") #Directory where the ARGoS files are created
+      cat("for i in {1..500}", "\n")
+      cat("do", "\n")
+      cat("\t", "if [ ! -d $parameterOutputPath/$SGE_TASKID/ ]; then", "\n")
+      cat("\t", "\t", "mkdir $parametersOutputPath/$SGE_TASK_ID", "\n")
+      cat("\t", "fi", "\n", "\n")
+      cat("\t", "if [ ! -d $parameterOutputPath/$SGE_TASKID/$i ]; then", "\n")
+      cat("\t", "\t", "mkdir $parametersOutputPath/$SGE_TASK_ID/$i", "\n")
+      cat("\t", "fi", "\n", "\n")
+      cat("\t", "argos3 -c $parameterFilePath/argos_experiment_set_$SGE_TASK_ID.argos", "\n")
+      cat("done")
+      sink()
+    }
+  )
+    
   #### Action when Add to Database is Pressed
   observeEvent(
     input$addToDB,
@@ -290,16 +349,21 @@ server <- function(input, output, session) {
       {
         if(input$description!="")
         {
-          rmysql.settingsfile<-"/Users/finlay/robospartan/databaseSpartan.cnf"
-          rmysql.db<-"spartan_ppsim"
-          dblink<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
-          experiment_id <- setup_experiment(dblink,"LHC","2018-08-22","robospartan test sample 3")
-        
-          add_parameter_set_to_database(dblink, myValues$sample,experiment_id)
-        
-          showModal(modalDialog(
-            title = "Important message",
-            paste("Experiment ID: ",experiment_id,sep="")))
+          if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
+          {
+            add_existing_lhc_sample_to_database(dblink, myValues$sample, experiment_description="Original ppsim lhc dataset")
+          }
+          
+          else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
+          {
+            add_existing_efast_sample_to_database(dblink, parameters, input$numCurves, parameters_r_object=myValues$sample, experiment_description="Original PPSim eFAST")
+          }
+          
+          else if(input$analysisType == "Robustness")
+          {
+            add_existing_robustness_sample_to_database(dblink, parameters, parameters_r_object=myValues$sample, experiment_description="Original PPSim Robustness")
+          
+          }  
         }
         else
         {
@@ -319,10 +383,13 @@ server <- function(input, output, session) {
     }
   )
   
+  observeEvent(input$createDB, 
+               create_database_structure(dblink, parameters, measures)) #Allow the user to create a database based on their parameters 
+  observeEvent(input$deleteDB, delete_database_structure(dblink)) #Allows the user to delete database structure
   
   #### Action when Clear Parameter is pressed
-  observeEvent(
-    input$clearParameter,
+  observeEvent({
+    input$clearParameter},
     {
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
       shinyjs::hide("createARGoSFiles") 
