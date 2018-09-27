@@ -23,6 +23,8 @@ baselines<-c()
 increments<-c()
 curves<-c()
 directory <- ""
+measures <- c()
+columnNames <<- c("Measures")
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -58,19 +60,19 @@ ui <- fluidPage(
           
           numericInput(inputId = "min",
                     label = "Minimum:",
-                    value = ""),
+                    value = 0, min = 0),
           
           numericInput(inputId = "max",
                     label = "Maximum:",
-                    value = ""),
+                    value = 0, min = 0),
           
           numericInput(inputId = "robustnessIncrement",
                        label = "Increment",
-                       value = ""),
+                       value = "", min = 0),
           
           numericInput(inputId = "baseline",
                        label = "Calibrated Baseline",
-                       value = ""),
+                       value = "", min = 0),
           
           #,textInput('txt','','Text')
           actionButton(inputId = "addParameter",
@@ -80,6 +82,15 @@ ui <- fluidPage(
           
         ),
         
+        wellPanel(id = "measuresWell",
+                  h4("Measures:"),
+                  textInput(inputId = "measures",
+                            label = "Choose Your Measures:",
+                            value = ""),
+                  actionButton(inputId = "addMeasure", label = "Add to Measures"),
+                  actionButton(inputId = "clearMeasures", label = "Clear All Measures")
+        ),
+        
         
        wellPanel(
          
@@ -87,15 +98,19 @@ ui <- fluidPage(
          
          numericInput(inputId = "numSamples",
                       label = "Number of Samples",
-                      value = 65),
+                      value = 65, min = 0),
          
          numericInput(inputId = "numCurves",
                       label = "Number of Curves",
-                      value = 1),
+                      value = 1, min = 0),
          
          selectInput(inputId = "algorithm",
                      label = "Sampling Algorithm",
                      choices = c("normal","optimal")),
+         
+         numericInput(inputId = "numExecutions",
+                      label = "Number of Replica Executions",
+                      value = 400, min = 0),
 
          actionButton(inputId = "createSample",
                    label = 'Create Sample'),
@@ -103,6 +118,36 @@ ui <- fluidPage(
           
          fileInput(inputId = "argosFiles",
                    label = "Argos File To Modify:"),
+         
+         textInput(inputId = "argosDirectory",
+                   label = "Type the full file directory where you wish the ARGoS file to save:",
+                   value = "/home/fgch500/robospartan/argosFiles"),
+         
+         tags$style("#argosDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+         
+         textInput(inputId = "argosDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         
+         tags$style("#argosDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         
+         textInput(inputId = "argosDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         
+         hr(), hr(), hr(),
+         
+         textInput(inputId = "zipDirectory",
+                   label = "Type the full file directory where you wish the ZIP file to save:",
+                   value = "/home/fgch500/robospartan/argosFilesZip"),
+         
+         tags$style("#zipDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+         
+         textInput(inputId = "zipDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         
+         tags$style("#zipDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         
+         textInput(inputId = "zipDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         
+         hr(), hr(), hr(),
+         
+         textInput(inputId = "zipName", label = "Enter the name you'd like the zip file saved as", value = "argosZIP", width = '100%'),
          
          actionButton(inputId = "createARGoSFiles",
                    label = 'Modify ARGoS Files'),
@@ -139,18 +184,22 @@ ui <- fluidPage(
       width = 5),
       
       # Show a plot of the generated distribution
-      mainPanel(
+      mainPanel(id = "main",
         
         # Output the parameters as they are entered:
         htmlOutput("table_header"),
         div(tableOutput("parameter_table"),style="font-size:90%"),
+        div(tableOutput("measures_table"),style = "font-size:90%"),
         
         hr(),
         
         # Now output the sample once generated, with a download button
         htmlOutput("sample_header"),
         div(DT::dataTableOutput(outputId = "sample"),style="font-size:90%"),
+        br(),
+        downloadButton(outputId = "settingFile", label = "Download settings"),
         downloadButton(outputId = "lhc_sample", label = "Download data"),
+        
         
         width=7
       )
@@ -161,19 +210,33 @@ ui <- fluidPage(
 # Define server logic 
 server <- function(input, output, session) {
   
+  measureCounter <- 1
+  measureValues <- reactiveValues()
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
-  shinyjs::hide("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
+  shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
   shinyjs::hide("addToDB")
   shinyjs::hide("createDB")
   shinyjs::hide("cluster")
+  shinyjs::hide("argosDirectory")
+  shinyjs::hide("zipDirectory")
+  shinyjs::hide("argosDirNotComplete")
+  shinyjs::hide("argosDirComplete")
+  shinyjs::hide("zipDirNotComplete")
+  shinyjs::hide("zipDirComplete")
+  shinyjs::hide("zipName")
+  shinyjs::disable("clearMeasures")
+  #shinyjs::hideElement("main")
+  shinyjs::hide("settingFile")
+  sampleCreated <<- FALSE #Flag to determine whether a sample has been created
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
     
     if(myValues$sampleGenerated==TRUE)
       shinyjs::show("lhc_sample")
+      
   })
  
   observeEvent(
@@ -206,6 +269,34 @@ server <- function(input, output, session) {
         } 
     })
   
+  observeEvent(input$addMeasure,
+               {
+                 if (input$measures != ""){
+                   measures <<- c(measures, input$measures)
+                   print(measures)
+                   updateTextInput(session, inputId = "measures", value = "")
+                   measureValues$table <- rbind(c("Measures:", measures))
+                   columnNames <<- c(columnNames, paste0("Measure ", measureCounter))
+                   colnames(measureValues$table) <- columnNames
+                   output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
+                   shinyjs::enable("clearMeasures")
+                   measureCounter <<- measureCounter + 1
+                   print (measureCounter)
+                 }
+               })
+  
+  observeEvent(input$clearMeasures,
+               {
+                 measures <<- c()
+                 updateTextInput(session, inputId = "measures", value = "")
+                 shinyjs::disable("clearMeasures")
+                 output$measures_table <-  NULL
+                 measureValues$table
+                 columnNames <<- c("Measures")
+                 measureCounter <<- 1
+               })
+  
+  
   # Download generated sample
   output$lhc_sample <- downloadHandler(
     filename = function() {
@@ -217,23 +308,96 @@ server <- function(input, output, session) {
       }
   )
   
+  #Create a settings .csv file
+  output$settingFile <- downloadHandler(
+    filename = function() {
+      "Settings.csv"
+    },
+    content = function(file) { 
+      write_csv(cbind(data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+    }
+  )
+  
+  observeEvent(input$argosFiles,
+      {
+        shinyjs::show("argosDirectory")
+        shinyjs::show("zipDirectory")
+      })
+  
+  observeEvent(input$argosDirectory,
+               {
+                 if(!is.null(input$argosFiles$datapath)){
+                   if(file.exists(input$argosDirectory))
+                   {
+                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::hide("argosDirNotComplete")
+                     shinyjs::show("argosDirComplete")
+                     
+                   }
+                   else
+                   {
+                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::show("argosDirNotComplete")
+                     shinyjs::hide("argosDirComplete")
+                   }
+                 }
+               })
+  
+  observeEvent(input$zipDirectory,
+               {
+                 if(!is.null(input$argosFiles$datapath)){
+                   if(file.exists(input$zipDirectory))
+                   {
+                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::hide("zipDirNotComplete")
+                     shinyjs::show("zipDirComplete")
+                     shinyjs::show("zipName")
+                     
+                   }
+                   else
+                   {
+                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::show("zipDirNotComplete")
+                     shinyjs::hide("zipDirComplete")
+                     shinyjs::hide("zipName")
+                   }
+                 }
+               })
+  #Make sure the zip file has a desired names
+  observeEvent(input$zipName,
+               {
+                 if (input$zipName == "")
+                 {
+                   shinyjs::disable("createARGoSFiles")
+                 }
+                 else
+                 {
+                   shinyjs::enable("createARGoSFiles")
+                 }
+               }
+               )
+                 
   #Modify ARGoS files
   observeEvent(input$createARGoSFiles,  
      {
-      if (!is.null(input$argosFiles$datapath)){
-         directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
-         zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go 
+      if (!is.null(input$argosFiles$datapath) && sampleCreated){
+         #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
+         directory <<- input$argosDirectory
+         #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
+         zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
+         zipName <- input$zipName
          filesToModify <- input$argosFiles$datapath
          showModal(modalDialog(
            title = "Creating ARGoS Files",
            "ARGoS files are being created..."))
-         make_argos_file_from_sample(filesToModify, directory, parameters, result, zipLocation)
+         make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation,zipName))
          shinyjs::show("cluster")
       }
+       
       else {
-        showModal(modalDialog(
-          title = "No ARGoS file found",
-          "PLease select an ARGoS file to modify"))
+          showModal(modalDialog(
+            title = "No Sample found",
+            "You must first create a sample with your chosen parameters and values"))
       }
      } 
   )
@@ -243,8 +407,10 @@ server <- function(input, output, session) {
     input$createSample,
     {
       result <<- NULL
+      sampleCreated <<- TRUE
       measures <<- c("Velocity", "Displacement")
-      shinyjs::show("createARGoSFiles") #allow the user to create argos files using the sample results 
+      shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
+      shinyjs::show("settingFile")
       if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
         myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
@@ -300,7 +466,7 @@ server <- function(input, output, session) {
         showModal(modalDialog(
           title = "Incorrect number of samples",
           "Number of samples should be numeric"))
-        shinyjs::hide("createARGoSFiles") 
+        shinyjs::disable("createARGoSFiles") 
         
       }
     }
@@ -327,7 +493,7 @@ server <- function(input, output, session) {
       cat("#$-l h_vmen=8G", "\n")
       cat("#$-l h_rt=23:59:59", "\n", "\n")
       cat(paste0("parameterFilePath = '",directory, "'"), "\n", "\n") #Directory where the ARGoS files are created
-      cat("for i in {1..500}", "\n")
+      cat(paste0("for i in {1..", input$numExecutions, "}"), "\n")
       cat("do", "\n")
       cat("\t", "if [ ! -d $parameterOutputPath/$SGE_TASKID/ ]; then", "\n")
       cat("\t", "\t", "mkdir $parametersOutputPath/$SGE_TASK_ID", "\n")
@@ -391,9 +557,10 @@ server <- function(input, output, session) {
   observeEvent({
     input$clearParameter},
     {
+      shinyjs::hideElement("main")
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
-      shinyjs::hide("createARGoSFiles") 
-
+      shinyjs::disable("createARGoSFiles") 
+      sampleCreated <<- FALSE
       parameters<<-c()
       mins<<-c()
       maxs<<-c()
@@ -422,6 +589,7 @@ server <- function(input, output, session) {
   observeEvent(
     input$addParameter,
     {
+    shinyjs::showElement("main")
     if(input$addParameter > 0){
       inputTest <- list(input$min, input$max)
       positiveNumber <<- TRUE
