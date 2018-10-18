@@ -40,6 +40,7 @@ userNetStruct <- c()
 structDone <- FALSE
 count <- 1
 partitionedData <- NULL
+partition_data<- NULL
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -247,18 +248,18 @@ server <- function(input, output, session) {
                  shinyjs::hide("NetStructs_table")
                  newData <- input$simData$datapath
                  print(newData)
-                 partitionedData <<- partition_dataset(sim_data_for_emulation, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 #partitionedData <<- partition_dataset(sim_data_for_emulation, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
                  #partitionedData <<- partition_dataset(newData, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
                  print(sampleMins)
                  print(sampleMaxes)
-                 #partitionedData <<- partition_dataset("/home/fgch500/robospartan/argosFiles/LHCStuff/LHCAllResults.csv", parameterList, percent_train = 75, percent_test = 15, percent_validation = 10, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 partitionedData <<- partition_dataset("/home/fgch500/robospartan/argosFiles/LHCStuff/LHCcombinedParamsAndResults.csv", parameterList, percent_train = 75, percent_test = 15, percent_validation = 10, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
                  print(partitionedData)  
                  showModal(modalDialog(
                    title = "Complete",
                    "Data has been successfully partitioned"))
                  PartData <<- TRUE
                  #partition_data <<- get(load("/home/fgch500/robospartan/Machine_learning_emulator_app/partitioned_data.Rda"))
-                 preNorms <<- cbind(partition_data$pre_normed_mins, partition_data$pre_normed_maxes)
+                 preNorms <<- cbind(partitionedData$pre_normed_mins, partitionedData$pre_normed_maxes)
                  colnames(preNorms) <<- c("Pre Normed Mins", "Pre Normed Maxs")
                  updateSelectInput(session, inputId = "whichData", selected = "Partitioned Data")
                  updateTabsetPanel(session, inputId = "PartitionedData_tabs", selected = "Training")
@@ -275,9 +276,9 @@ server <- function(input, output, session) {
                {
                  
                  shinyjs::hide("AlgorithmSettings_table")
-                 switch(input$PartitionedData_tabs, "Training" =  output$PartitionedData_table <- renderTable(partition_data$training, striped = TRUE, bordered = TRUE, rownames = TRUE),
-                                                    "Testing" =  output$PartitionedData_table <- renderTable(partition_data$testing, striped = TRUE, bordered = TRUE, rownames = TRUE),
-                                                    "Validation" = output$PartitionedData_table <- renderTable(partition_data$validation, striped = TRUE, bordered = TRUE, rownames = TRUE),
+                 switch(input$PartitionedData_tabs, "Training" =  output$PartitionedData_table <- renderTable(partitionedData$training, striped = TRUE, bordered = TRUE, rownames = TRUE),
+                                                    "Testing" =  output$PartitionedData_table <- renderTable(partitionedData$testing, striped = TRUE, bordered = TRUE, rownames = TRUE),
+                                                    "Validation" = output$PartitionedData_table <- renderTable(partitionedData$validation, striped = TRUE, bordered = TRUE, rownames = TRUE),
                                                     "Pre Normed Values" = output$PartitionedData_table <- renderTable(preNorms, striped = TRUE, bordered = TRUE, rownames = TRUE, colnames = TRUE))
                 
                })
@@ -461,14 +462,14 @@ server <- function(input, output, session) {
                    sampleMaxes <<- settingsData$Max
                    while (!is.null(settingsData[1, i])) #Keep going along the columns until there are no more measures
                    {
-                     measures <<- c(measures, settingsData[1, i]) #Add one instance of the measure name 
+                     measures <<- c(measures, gsub(" ", "",settingsData[1,i]))#Add one instance of the measure name 
                      i <- i+1 
                      columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-7))
                    }
                    myValues$table <- rbind(isolate(myValues$table), cbind(parameterList,sampleMins,sampleMaxes))
                    measureValues$table <- matrix(c("Measures:", measures), nrow = 1, byrow = TRUE)
                    colnames(measureValues$table) <- columnNamesMeasures
-                   
+                   print(measures)
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
                    updateSelectInput(session, inputId = "measureSelect", choices = measures)
                    shinyjs::enable("partitionDataset")
