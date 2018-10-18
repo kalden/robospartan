@@ -25,6 +25,8 @@ curves<-c()
 directory <- ""
 measures <- c()
 columnNames <<- c("Measures")
+wholeNumbers <- c()
+Decimal_or_Rounded <- c()
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -44,7 +46,6 @@ ui <- fluidPage(
       sidebarPanel(
         
        
-        
         wellPanel(
           
           h4("Analysis Technique:"),
@@ -68,11 +69,14 @@ ui <- fluidPage(
           
           numericInput(inputId = "robustnessIncrement",
                        label = "Increment",
-                       value = "", min = 0),
+                       value = 0, min = 0),
           
           numericInput(inputId = "baseline",
                        label = "Calibrated Baseline",
-                       value = "", min = 0),
+                       value = 0, min = 0),
+          
+          checkboxInput(inputId = "wholeNumber", label = "Values Rounded to a Whole Number"),
+          
           
           #,textInput('txt','','Text')
           actionButton(inputId = "addParameter",
@@ -86,7 +90,7 @@ ui <- fluidPage(
                   h4("Measures:"),
                   textInput(inputId = "measures",
                             label = "Choose Your Measures:",
-                            value = ""),
+                            value = "NULL"),
                   actionButton(inputId = "addMeasure", label = "Add to Measures"),
                   actionButton(inputId = "clearMeasures", label = "Clear All Measures")
         ),
@@ -229,6 +233,7 @@ server <- function(input, output, session) {
   shinyjs::disable("clearMeasures")
   #shinyjs::hideElement("main")
   shinyjs::hide("settingFile")
+  shinyjs::hide("wholeNumber")
   sampleCreated <<- FALSE #Flag to determine whether a sample has been created
   #### Hide the sample table if not generated yet
   observe({
@@ -238,7 +243,7 @@ server <- function(input, output, session) {
       shinyjs::show("lhc_sample")
       
   })
- 
+  
   observeEvent(
     input$analysisType,
     {   
@@ -250,6 +255,7 @@ server <- function(input, output, session) {
           shinyjs::hide("algorithm")
           shinyjs::hide("numCurves") 
           shinyjs::show("baseline")
+          shinyjs::hide("wholeNumber")
         }  
         #Latin-Hypercube analysis technique - parameter requires param, min, max. Settings are sample number and algorithm type.
         else if(input$analysisType == "Latin-Hypercube"){
@@ -258,6 +264,7 @@ server <- function(input, output, session) {
           shinyjs::show("algorithm")
           shinyjs::hide("numCurves") 
           shinyjs::hide("baseline")
+          shinyjs::show("wholeNumber")
         }  
         #eFAST analysis technique - parameter requires requires param, min, max. Settings require additional 
         else{
@@ -266,6 +273,7 @@ server <- function(input, output, session) {
           shinyjs::hide("algorithm")
           shinyjs::show("numCurves") 
           shinyjs::hide("baseline")
+          shinyjs::show("wholeNumber")
         } 
     })
   
@@ -386,6 +394,7 @@ server <- function(input, output, session) {
          #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
          zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
          zipName <- input$zipName
+         print(result)
          filesToModify <- input$argosFiles$datapath
          showModal(modalDialog(
            title = "Creating ARGoS Files",
@@ -408,15 +417,23 @@ server <- function(input, output, session) {
     {
       result <<- NULL
       sampleCreated <<- TRUE
-      measures <<- c("Velocity", "Displacement")
+      #measures <<- c("Velocity", "Displacement")
       shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
       shinyjs::show("settingFile")
+      
       if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
       {
         myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
         myValues$sampleGenerated<<-TRUE
         columnNames <<- c(parameters)
         result<<-myValues$sample #required when the user wishes to download the analysis
+        if (length(wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
+        {
+          for (i in wholeNumbers)
+          {
+            result [ ,i] <<- round(result[ ,i])
+          }
+        }
         output$sample_header <- renderUI({ h4("Generated Sample:") })
         output$sample <- DT::renderDataTable(
           DT::datatable(data = result, 
@@ -566,14 +583,19 @@ server <- function(input, output, session) {
       maxs<<-c()
       increments<<-c()
       baselines<<-c()
+      wholeNumbers <<- c()
       myValues$sampleGenerated<-FALSE
     
       myValues$table<-NULL
+      
+      #change values back to the default
       updateTextInput(session, "parameter", value = "")     
-      updateTextInput(session, "min", value = "")
-      updateTextInput(session, "max", value = "")
-      updateTextInput(session, "baseline", value = "")
-      updateTextInput(session, "robustnessIncrement", value = "")
+      updateTextInput(session, "min", value = 0)
+      updateTextInput(session, "max", value = 0)
+      updateTextInput(session, "baseline", value = 0)
+      updateTextInput(session, "robustnessIncrement", value = 0)
+      updateCheckboxInput(session, "wholeNumber", value = FALSE)
+      
       # Need to clear the generated sample to:
       if(!is.null(myValues$sample))
       {
@@ -609,8 +631,17 @@ server <- function(input, output, session) {
           max<-isolate(input$max)
           
           parameters<<-c(parameters,parameter)
+          
+          if (input$wholeNumber == TRUE)
+          {
+            wholeNumbers <<- c(wholeNumbers, length(parameters))
+            wholeNumbersBool <<- "Whole Number"
+          }
+          else 
+          {
+            wholeNumbersBool <<- "Decimal"  
+          }
 
-  
           if (input$analysisType != "Robustness")
           {
             baseline <- "N/A"
@@ -620,6 +651,7 @@ server <- function(input, output, session) {
           {
             baseline <- isolate(input$baseline)
             increment <- isolate(input$robustnessIncrement)
+            wholeNumbersBool <<- "N/A"
           }
           
           mins<<-c(mins,as.numeric(min))
@@ -627,13 +659,17 @@ server <- function(input, output, session) {
           baselines<<-c(baselines,as.numeric(baseline))
           increments<<-c(increments, as.numeric(increment))
           
+          Decimal_or_Rounded <<- c(Decimal_or_Rounded, wholeNumbersBool)
+          
           myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max,increment,baseline))
-  
+          
+          #Change option boxes back to default 
           updateTextInput(session, "parameter", value = "")     
-          updateTextInput(session, "min", value = "")
-          updateTextInput(session, "max", value = "")
-          updateTextInput(session, "baseline", value = "")
-          updateTextInput(session, "robustnessIncrement", value = "")
+          updateTextInput(session, "min", value = 0)
+          updateTextInput(session, "max", value = 0)
+          updateTextInput(session, "baseline", value = 0)
+          updateTextInput(session, "robustnessIncrement", value = 0)
+          updateCheckboxInput(session, "wholeNumber", value = FALSE)
           
           shinyjs::show("createSample") #Allow the user to click the show sample button
           
@@ -664,8 +700,13 @@ server <- function(input, output, session) {
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
     {
-      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline" )
-      myValues$table
+      #This is the column names for the settings file
+      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline")
+      
+      #This part changes only what the user sees on screen and not what gets downloaded in the settings file, as there is no need to know about rounding in the settings file.
+      forUserToSee <- cbind(myValues$table, Decimal_or_Rounded)
+      colnames(forUserToSee) <- c("Parameter","Min","Max", "Increment", "Baseline", "Decimal/Whole Number")
+      forUserToSee #show the user the table
     }
     
   })
