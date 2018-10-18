@@ -302,23 +302,27 @@ server <- function(input, output, session) {
   
   observeEvent(input$AlgorithmSettings_tabs,
                {
-                 shinyjs::hide("PartitionedData_table")
-                 print(str(networkStructures))
-                 settings <- cbind(algorithmSettings$num_trees, algorithmSettings$num_of_generations, algorithmSettings$num_of_folds, algorithmSettings$save_emulators, algorithmSettings$save_ensemble, algorithmSettings$plot_test_accuracy)
-                 colnames(settings)<-c("Number of Trees", "Number of Generations", "Number of Folds", "Save Emulators (1-True, 0-False)","Save Ensemble (1-True, 0-False)", "Plot Test Accuracy (1-True, 0-False)")
-                 if (structDone == TRUE)
+                 if (algsDone == TRUE)
                  {
-                   for (networkNumber in 1:length(networkStructures))
+                   shinyjs::hide("PartitionedData_table")
+                   print(str(networkStructures))
+                   settings <- cbind(algorithmSettings$num_trees, algorithmSettings$num_of_generations, algorithmSettings$num_of_folds, algorithmSettings$save_emulators, algorithmSettings$save_ensemble, algorithmSettings$plot_test_accuracy)
+                   colnames(settings)<-c("Number of Trees", "Number of Generations", "Number of Folds", "Save Emulators (1-True, 0-False)","Save Ensemble (1-True, 0-False)", "Plot Test Accuracy (1-True, 0-False)")
+                   if (structDone == TRUE)
                    {
+                     for (networkNumber in 1:length(networkStructures))
+                     {
                        indivStructure <- paste(unlist(networkStructures[[networkNumber]]), collapse = ', ') #Convert the list element into a string with comma seperation between the values
                        netStruct <-rbind(netStruct, cbind(networkNumber, indivStructure))
+                     }
+                     colnames(netStruct) <- c("Network", "Structure")
                    }
-                   colnames(netStruct) <- c("Network", "Structure")
+                   
+                   switch(input$AlgorithmSettings_tabs, "Network Structures" =  output$AlgorithmSettings_table <- renderTable(netStruct, striped = TRUE, bordered = TRUE),
+                          "Settings" = output$AlgorithmSettings_table <- renderTable(settings, striped = TRUE, bordered = TRUE))
+                   #shinyjs::show("AlgorithmSettings_table")
                  }
-                
-                 switch(input$AlgorithmSettings_tabs, "Network Structures" =  output$AlgorithmSettings_table <- renderTable(netStruct, striped = TRUE, bordered = TRUE),
-                                                      "Settings" = output$AlgorithmSettings_table <- renderTable(settings, striped = TRUE, bordered = TRUE))
-                 #shinyjs::show("AlgorithmSettings_table")
+                 
 
                })
 
