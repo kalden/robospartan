@@ -15,7 +15,7 @@ library(ggplot2)
 #LHCFilePathFull <<- "/home/fgch500/robospartan/LHCFiles"
 #/home/fgch500/robospartan/argosFiles/LHCStuff
 #robustFilePathFull <<- "/home/fgch500/robospartan/robustnessFiles"
-#eFASTFilePath <<- "/home/fgch500/robospartan/eFASTfiles/eFAST_Sample_Outputs"
+#eFASTFilePath <<- "4"
 LHCFilePathFull <<- ""
 robustFilePathFull <<- ""
 eFASTFilePath <<- ""
@@ -41,7 +41,7 @@ minvals <<- c()
 maxvals <<- c()
 incvals <<- c()
 fileName <<- FALSE
-lhcSummary <- NULL
+#lhcSummary <- NULL
 columnNamesScale <<- c("Measure Scales")
 AtestResultsLocation <<- paste0(robustFilePathFull,"/ATest_Results.csv")
 parameterList <<-c()
@@ -113,7 +113,7 @@ ui <- fluidPage(
                   h4("Extra Variables:"),
                   numericInput(inputId = "aTestSig", label = "A-Test Signal Level:", value = 0.23, step = 0.01, min = 0),
                   numericInput(inputId = "num_curves", label = "Number of Curves:", value = 3, min = 0),
-                  numericInput(inputId = "num_samples", label = "N umber of Samples:", value = 65, min = 0),
+                  numericInput(inputId = "num_samples", label = "Number of Samples:", value = 65, min = 0),
                   numericInput(inputId = "ttest_conf", label = "T-Test Confidence Interval:", value = 0.95, step = 0.01, max = 1.00, min = 0)),
         
         wellPanel(id = "filesWell",
@@ -272,6 +272,7 @@ server <- function(input, output, session) {
                      {
                        shinyjs::hide("ParameterFile")
                        shinyjs::hide("AllResults")
+                       shinyjs::show("lastWell")
                      }
                      else if (input$usersAnalysisType == "Latin-Hypercube")
                      {
@@ -395,7 +396,14 @@ server <- function(input, output, session) {
                     checkIfSummaryNeeded <- read.csv(input$AllResults$datapath, stringsAsFactors = FALSE, row.names = NULL)
                     if (checkIfSummaryNeeded[1,1] == checkIfSummaryNeeded[2,1])
                     {
-                      summary <- lhc_generateLHCSummary(filepath, parameterList, measures,input$AllResults$datapath, lhcSummaryFull, input$ParameterFile$datapath) 
+                      print(input$AllResults$name)
+                      print(LHCFilePathFull)
+                      print(input$ParameterFile$name)
+                      print(lhcSummary)
+                      print(parameterList)
+                      print(measures)
+                      #summary <- lhc_generateLHCSummary(filepath, parameterList, measures,input$AllResults$datapath, lhcSummaryFull, input$ParameterFile$datapath) 
+                      summary <- lhc_generateLHCSummary(LHCFilePathFull, parameterList, measures, input$AllResults$name, lhcSummary, input$ParameterFile$name) 
                       showModal(modalDialog(
                         title = "Complete",
                         "Summary files have been created"))
@@ -429,7 +437,7 @@ server <- function(input, output, session) {
                      title = "Creating Results",
                      "Overall medians result file are being created..."
                    ))
-                   efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures )
+                   efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures)
                    showModal(modalDialog(
                      title = "Complete",
                      "Overall medians result file have been created"
@@ -527,7 +535,7 @@ server <- function(input, output, session) {
                      "Graphs are being generated..."))
                    lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, input$corCoeffsFileName, lhcSummary, OUTPUT_TYPE = "PNG")
                    #POLAR PLOT CURRENTLY GIVING AN ERROR
-                    #lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
+                   lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
                    #lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, "LHC_corCoeffs", lhcSummary, OUTPUT_TYPE = "PNG")
                    #lhc_polarplot(LHCFilePathFull, parameterList, measures, "LHC_corCoeffs") 
                    showModal(modalDialog(
