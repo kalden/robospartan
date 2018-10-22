@@ -10,6 +10,7 @@
 library(shiny)
 library(spartan)
 library(shinyjs)
+library(ggplot2)
 
 #LHCFilePathFull <<- "/home/fgch500/robospartan/LHCFiles"
 #/home/fgch500/robospartan/argosFiles/LHCStuff
@@ -40,6 +41,7 @@ minvals <<- c()
 maxvals <<- c()
 incvals <<- c()
 fileName <<- FALSE
+lhcSummary <- NULL
 columnNamesScale <<- c("Measure Scales")
 AtestResultsLocation <<- paste0(robustFilePathFull,"/ATest_Results.csv")
 parameterList <<-c()
@@ -111,7 +113,7 @@ ui <- fluidPage(
                   h4("Extra Variables:"),
                   numericInput(inputId = "aTestSig", label = "A-Test Signal Level:", value = 0.23, step = 0.01, min = 0),
                   numericInput(inputId = "num_curves", label = "Number of Curves:", value = 3, min = 0),
-                  numericInput(inputId = "num_samples", label = "Number of Samples:", value = 65, min = 0),
+                  numericInput(inputId = "num_samples", label = "N umber of Samples:", value = 65, min = 0),
                   numericInput(inputId = "ttest_conf", label = "T-Test Confidence Interval:", value = 0.95, step = 0.01, max = 1.00, min = 0)),
         
         wellPanel(id = "filesWell",
@@ -145,7 +147,7 @@ ui <- fluidPage(
            actionButton(inputId = "GraphButton",
                         label = "Generate"),
            
-           actionButton(inputId = "showGraphs",
+           actionButton(inputId = "showGraphs", 
                         label = "Show Graphs")
 
          ),
@@ -166,6 +168,7 @@ ui <- fluidPage(
         # tabsetPanel(id = "changingTabs", type = "tabs",
         #          tabPanel(title = "Remove",
         #                   imageOutput(outputId = "Graph"))
+        actionButton(inputId = "dispGraph", "Display this Graph"),
         imageOutput(outputId = "Graph"),
        
         
@@ -203,7 +206,11 @@ server <- function(input, output, session) {
   shinyjs::disable("clearMeasureScales")
   shinyjs::hide("selectUI")
   shinyjs::hide("changingMeasures")
-  shinyjs::hide("showGraph")
+  shinyjs::hide("dispGraph")
+  #shinyjs::hide("showGraph")
+  shinyjs::hideElement("lastWell")
+  shinyjs::hide("ParameterFile")
+  shinyjs::hide("AllResults")
   
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
@@ -214,6 +221,36 @@ server <- function(input, output, session) {
     } 
     
   })
+  
+  observeEvent(input$AllResults,
+               {
+                 if (input$AllResults$type == "text/csv")
+                 {
+                   shinyjs::showElement("lastWell")
+                 }
+                 else
+                 {
+                   showModal(modalDialog(
+                     title = "Wrong File Format",
+                     "This file must be a .csv file"))
+                   shinyjs::hideElement("lastWell")
+                 }
+               })
+  
+  observeEvent(input$ParameterFile,
+               {
+                 if (input$ParameterFile$type == "text/csv")
+                 {
+                   shinyjs::showElement("lastWell")
+                 }
+                 else
+                 {
+                   showModal(modalDialog(
+                     title = "Wrong File Format",
+                     "This file must be a .csv file"))
+                   shinyjs::hideElement("lastWell")
+                 }
+               })
   
   observeEvent(input$filePaths,
                {
@@ -226,6 +263,22 @@ server <- function(input, output, session) {
                      switch(input$usersAnalysisType, "Latin-Hypercube" = LHCFilePathFull <<- input$filePaths,
                                                      "Robustness" = robustFilePathFull <<- input$filePaths,
                                                      "eFAST" = eFASTFilePath <<- input$filePaths)
+                     if(input$usersAnalysisType == "Robustness")
+                     {
+                       shinyjs::hide("ParameterFile")
+                       shinyjs::show("AllResults")
+                     }
+                     else if(input$usersAnalysisType == "eFAST")
+                     {
+                       shinyjs::hide("ParameterFile")
+                       shinyjs::hide("AllResults")
+                     }
+                     else if (input$usersAnalysisType == "Latin-Hypercube")
+                     {
+                       shinyjs::show("ParameterFile")
+                       shinyjs::show("AllResults")
+                     }
+                     
                      
                    }
                    else
@@ -233,6 +286,8 @@ server <- function(input, output, session) {
                      fileName <<- FALSE
                      shinyjs::show("filePathFalse")
                      shinyjs::hide("filePathTrue")
+                     shinyjs::hide("ParameterFile")
+                     shinyjs::hide("AllResults")
                    }
                  }
                })
@@ -299,8 +354,9 @@ server <- function(input, output, session) {
                  {
                    #These first two lines ensures that the tables are reset, so if the user changing their settings file, the one and new values wont bind together. Instead only the new values will be shown.
                    myValues$table <- NULL
-                   measureValues$table <- NULL
-                   i <<- 7 #Measures begin at column 7
+                   measureValues$table <<- NULL
+                   measures <<- c()
+                   i <<- 8 #Measures begin at column 8
                    columnNamesMeasures <<- c("Measures")
                    settingsData <- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
                    print(settingsData)
@@ -311,38 +367,50 @@ server <- function(input, output, session) {
                    baseline <<- settingsData$Baseline
                    while (!is.null(settingsData[1, i])) #Keep going along the columns until there are no more measures
                    {
-                     measures <<- c(measures, settingsData[1, i]) #Add one instance of the measure name 
+                     measures <<- c(measures,gsub(" ", "",settingsData[1,i])) #Add one instance of the measure name. Removing any whitespace in the name
                      i <- i+1 
-                     columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-7))
+                     columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-8))
                    }
                    myValues$table <- rbind(isolate(myValues$table), cbind(parameterList,minvals,maxvals,incvals,baseline))
                    measureValues$table <- matrix(c("Measures:", measures), nrow = 1, byrow = TRUE)
                    colnames(measureValues$table) <- columnNamesMeasures
-                
+                   print(measures)
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
-                   
-                   
+                   updateSelectInput(session, inputId = "usersAnalysisType", selected = settingsData$analysis_type)
+                   shinyjs::disable("usersAnalysisType")
                  }
                }   
                )
   
-  
-  
+
   observeEvent(input$LHSSummary,
+               {
                 if (input$usersAnalysisType == "Latin-Hypercube")
-                  {showModal(modalDialog(
+                  {
+                    showModal(modalDialog(
                     title = "Creating Summary",
                     "Summary files are being created..."))
-                    print(input$AllResults$datapath)
-                    print(input$ParameterFile$datapath)
-                    summary <- lhc_generateLHCSummary(filepath, parameterList, measures,input$AllResults$datapath, lhcSummaryFull, input$ParameterFile$datapath) 
-                    print(parameterList)
-                    print(measures)
-                    print(lhcSummaryFull)
-                    #summary <- lhc_generateLHCSummary(filepath, parameterList, measures, "/home/fgch500/robospartan/argosFiles/LHCStuff/LHCAllResults.csv", lhcSummaryFull, "/home/fgch500/robospartan/argosFiles/LHCStuff/edgarSimParametersLHC.csv") 
-                    showModal(modalDialog(
-                      title = "Complete",
-                      "Summary files have been created"))}
+                    #print(input$AllResults)
+                    #print(input$ParameterFile$datapath)
+                    checkIfSummaryNeeded <- read.csv(input$AllResults$datapath, stringsAsFactors = FALSE, row.names = NULL)
+                    if (checkIfSummaryNeeded[1,1] == checkIfSummaryNeeded[2,1])
+                    {
+                      summary <- lhc_generateLHCSummary(filepath, parameterList, measures,input$AllResults$datapath, lhcSummaryFull, input$ParameterFile$datapath) 
+                      showModal(modalDialog(
+                        title = "Complete",
+                        "Summary files have been created"))
+                    }
+                    
+                    else
+                    {
+                      showModal(modalDialog(
+                        title = "No Summary Needed",
+                        "A Summary file is not required as data already summarised"))
+                         lhcSummary <<- input$AllResults$name
+                    }
+                  }
+                    
+                   
                  else if (input$usersAnalysisType == "Robustness"){
                     print(input$AllResults$datapath)
                     #results <<- "Robustness_Data.csv" #THIS IS ONLY HERE UNTIL THE CHECKING ERROR IS FIXED, ONCE FIXED FILE PATH MUST BE CHANGED TO NULL
@@ -350,7 +418,7 @@ server <- function(input, output, session) {
                       title = "Creating Results",
                       "ATest result files are being created..."
                     ))
-                    oat_csv_result_file_analysis(filepath, input$AllResults$datapath , parameterList, baseline, measures, paste0(robustFilePathFull, input$ATestFileName, ".csv"), minvals, maxvals, incvals, PARAMVALS=NULL)
+                    oat_csv_result_file_analysis(filepath, input$AllResults$datapath , parameterList, baseline, measures, paste0(robustFilePathFull, "/", input$ATestFileName, ".csv"), minvals, maxvals, incvals, PARAMVALS=NULL)
                     showModal(modalDialog(
                       title = "Complete",
                       "ATest result files have been created"
@@ -367,14 +435,17 @@ server <- function(input, output, session) {
                      "Overall medians result file have been created"
                    ))  
                }
+          }
                   )
   
   observeEvent(input$LHSGenerate,
                { 
                  print(parameterList)
                  print(measures)
-                 #lhc_generatePRCoEffs(LHCFilePathFull, parameterList, measures, lhcSummary, input$corCoeffsFileName)  
-                 lhc_generatePRCoEffs("/home/fgch500/robospartan/argosFiles/LHCStuff/", parameterList, measures, "LHC_Summary.csv", "LHC_corCoeffs")  
+                 #lhcSummary <<- "LHC_Summary.csv"
+                 print(lhcSummary)
+                 lhc_generatePRCoEffs(LHCFilePathFull, parameterList, measures, lhcSummary, input$corCoeffsFileName)  
+                # lhc_generatePRCoEffs("/home/fgch500/robospartan/LHCFiles", parameterList, measures, "LHC_Summary.csv", "LHC_corCoeffs")  
                  showModal(modalDialog(
                    title = "Complete",
                    "Coefficients files have been created"))
@@ -383,8 +454,6 @@ server <- function(input, output, session) {
   observeEvent(input$usersAnalysisType,
                if(input$usersAnalysisType == "Robustness")
                {
-                 shinyjs::hide("ParameterFile")
-                 shinyjs::show("AllResults")
                  shinyjs::hide("LHSGenerate")
                  shinyjs::show("filePath")
                  shinyjs::show("ATestFileName")
@@ -399,7 +468,6 @@ server <- function(input, output, session) {
                  shinyjs::hide("ttest_conf")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
-                 shinyjs::showElement("lastWell")
                  output$textChange <- renderText("")
                  output$selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = c(parameterList))
@@ -407,9 +475,6 @@ server <- function(input, output, session) {
                }
                else  if(input$usersAnalysisType == "eFAST")
                {
-                
-                 shinyjs::hide("ParameterFile")
-                 shinyjs::hide("AllResults")
                  shinyjs::hide("LHSGenerate")
                  shinyjs::show("filePath")
                  shinyjs::hide("ATestFileName")
@@ -424,7 +489,6 @@ server <- function(input, output, session) {
                  shinyjs::show("ttest_conf")
                  shinyjs::hideElement("measuresWell")
                  shinyjs::hideElement("filesWell")
-                 shinyjs::showElement("lastWell")
                  output$textChange <- renderText("")
                  output$selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = measures)
@@ -435,9 +499,7 @@ server <- function(input, output, session) {
                }
                else if (input$usersAnalysisType == "Latin-Hypercube")
                {
-                 shinyjs::show("ParameterFile")
                  shinyjs::show("LHSGenerate")
-                 shinyjs::show("AllResults")
                  shinyjs::show("filePath")
                  shinyjs::hide("ATestFileName")
                  shinyjs::hide("eFASTResultsFileName")
@@ -447,7 +509,6 @@ server <- function(input, output, session) {
                  shinyjs::hideElement("Extras")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
-                 shinyjs::showElement("lastWell") 
                  output$textChange <- renderText("Generate Coefficients")
                  output$ selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = c(parameterList, "polarPlot"))
@@ -465,7 +526,10 @@ server <- function(input, output, session) {
                      title = "Generating Graphs",
                      "Graphs are being generated..."))
                    lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, input$corCoeffsFileName, lhcSummary, OUTPUT_TYPE = "PNG")
-                   lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
+                   #POLAR PLOT CURRENTLY GIVING AN ERROR
+                    #lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
+                   #lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, "LHC_corCoeffs", lhcSummary, OUTPUT_TYPE = "PNG")
+                   #lhc_polarplot(LHCFilePathFull, parameterList, measures, "LHC_corCoeffs") 
                    showModal(modalDialog(
                      title = "Complete",
                      "Graphs have been generated"))
@@ -475,24 +539,27 @@ server <- function(input, output, session) {
                    showModal(modalDialog(
                      title = "Generating Graphs",
                      "Graphs are being generated..."))
-                   oat_graphATestsForSampleSize(robustFilePathFull, parameterList, measures, input$aTestSig, paste0(input$ATestFileName, ".csv"), baseline, minvals, maxvals, incvals, PARAMVALS=NULL)
-                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
-                   #NEEDS TO BE FIXED IN SPARTAN !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                   #oat_plotResultDistribution(filepath, parameterList, measures, measure_scale, input$AllResults$datapath, baseline, minvals, maxvals, incvals, PARAMVALS=NULL) 
+                   print(input$AllResults$datapath)
+                   oat_graphATestsForSampleSize(robustFilePathFull, parameterList, measures, input$aTestSig, paste0(input$ATestFileName, ".csv"), baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png"))
+                   #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
+                   
+                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, input$AllResults$name, baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
                    showModal(modalDialog(
                      title = "Complete",
                      "Graphs have been generated"))
+                   
                    }
                 else if (input$usersAnalysisType == "eFAST")
                 {
                   showModal(modalDialog(
                     title = "Generating Graphs",
                     "Graphs are being generated..."))
-                  efast_run_Analysis(eFASTFilePath, measures, parameterList, input$num_curves, input$num_samples, 1:length(measures), input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"))  
+                  print(input$ttest_conf)
+                  efast_run_Analysis(eFASTFilePath, measures, parameterList, input$num_curves, input$num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"))  
                   showModal(modalDialog(
                     title = "Complete",
                     "Graphs have been generated"))
-                  }
+                }
                })
   output$firstChoice <- renderText({
                           switch(input$usersAnalysisType, "Latin-Hypercube" = "Generate Summary",
@@ -508,306 +575,54 @@ server <- function(input, output, session) {
   
   observeEvent(input$usersAnalysisInput,
                {
-                 
-                 shinyjs::show("changingMeasures")
-                 shinyjs::show("showGraph")
-                 
-                 if (input$usersAnalysisType == "eFAST")
+                 shinyjs::hide("Graph")
+               })
+  
+  observeEvent(input$changingMeasures, shinyjs::hide("Graph"))
+  
+  observeEvent(input$dispGraph,
+               {
+                 #shinyjs::show("showGraph")
+                 shinyjs::show("Graph")
+                 if(input$changingMeasures == "A-Test Results")
                  {
-                   shinyjs::hide("selectUI") #Parameters are not required for eFAST graphs
+                   output$Graph <- renderImage(list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE)
                  }
-                 fileOfGraph <<- c()
-                 #This for loop gets rid of unwanted tab panels
-                 # for (j in 1:length(measures)){
-                 #   tempNameVariable <- paste0(previousChoice,"_", measures[j])
-                 #   removeTab(inputId = "changingTabs", target = tempNameVariable)
-                 # }
-
-                 #This for loop adds the desired tab panels    
-      
-                 # for (i in  1:length(measures)){
-                 #   tempNameVariable <- paste0(input$usersAnalysisInput,"_", measures[i])
-                 #   fileOfGraph <- c(fileOfGraph, paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[i],".png"))
-                 #   appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[i], width = '100%',
-                 #                                                                                         alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   print(i)
-                 #   print(fileOfGraph)
-                 # }
-                 updateSelectInput(session, inputId = "changingMeasures", choices = measures)
+                 else
+                 {
+                   output$Graph <- switch(input$usersAnalysisType, "Latin-Hypercube" = renderImage(list(src = paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
+                                          "Robustness" = renderImage(list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, input$changingMeasures, "_BP.png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
+                                          "eFAST" = renderImage(list(src = paste0(eFASTFilePath, "/", input$changingMeasures, ".png"), width = '100%', alt = paste("Image not found")), deleteFile = FALSE))
+                   
+                 }
                  
-                 output$Graph <- switch(input$usersAnalysisType, "Latin-Hypercube" = renderImage(list(src = paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
-                                                                 "Robustness" = renderImage(list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
-                                                                 "eFAST" = renderImage(list(src = paste0(eFASTFilePath, "/", input$changingMeasures, ".png"), width = '100%', alt = paste("Image not found")), deleteFile = FALSE))
-                 
-                
-                 #Looping problem here, the append tab does not work when same variable is changed. It only takes the last change for all tabs.
-                 # for (i in  1:length(measures)){
-                 #   tempNameVariable <- paste0(input$usersAnalysisInput,"_", measures[i])
-                 #   fileOfGraph <- c(fileOfGraph, paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[i],".png"))
-                 #   if (i == 1){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[1], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #     
-                 #   }
-                 #   else if (i == 2){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[2], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #    
-                 #   }
-                 #   
-                 #   else if (i == 3){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[3], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 4){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[4], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 5){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[5], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 6){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[6], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 7){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[7], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 8){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[8], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 9){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[9], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 10){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[10], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   else if (i == 11){
-                 #     appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[11], width = '100%',
-                 #                                                                                           alt = paste("Image not found")), deleteFile = FALSE)))
-                 #   }
-                 #   
-                 #   print(i)
-                 #   print(fileOfGraph)
-                 # }
-                 # k <<- 1
-                 # tempNameVariable <- paste0(input$usersAnalysisInput,"_", measures[k])
-                 # fileOfGraph <- c(fileOfGraph, paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[k],".png"))
-                 # appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[k], width = '100%',
-                 #                                                                                  alt = paste("Image not found")), deleteFile = FALSE)))
-                 # l <<- k+1
-                 # tempNameVariable <- paste0(input$usersAnalysisInput,"_", measures[l])
-                 # fileOfGraph <- c(fileOfGraph, paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[l],".png"))
-                 # appendTab(inputId = "changingTabs", tab = tabPanel(tempNameVariable, renderImage(list(src = fileOfGraph[l], width = '100%',
-                 #                                                                          alt = paste("Image not found")), deleteFile = FALSE)))
-                 # 
-                 # print(k)
-                 # print(fileOfGraph)
-
-                 # removeTab(inputId = "changingTabs", target = "Remove") #Remove the temporary tab that allowed for initial appending
-                 # previousChoice <<- input$usersAnalysisInput #save the previous user input so that it can be used to remove unwanted tab panels
                })
 
-#   #These switch function change the two tabs that will be shown to the user so graphs can be displayed neatly
-#   output$choicePanel <- renderText({
-#                             if (input$usersAnalysisType != "eFAST")
-#                             { 
-#                               paste0(input$usersAnalysisInput,"_", measures[1])
-#                               #print(input$usersAnalysisInput)
-#                               #firstMeasurePrint = paste0(input$usersAnalysisInput,"_", measures[1])
-#                               # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  = firstMeasurePrint,
-#                               #                                  "maxProbabilityOfAdhesion" = firstMeasurePrint,
-#                               #                                  "stableBindProbability" = firstMeasurePrint,
-#                               #                                  "maxChemokineExpressionValue" = firstMeasurePrint,
-#                               #                                  "initialChemokineExpressionValue" = firstMeasurePrint,
-#                               #                                  "chemokineExpressionThreshold" = firstMeasurePrint,
-#                               #                                  "polarPlot" = firstMeasurePrint)
-#                             }
-#                             else NULL
-#     
-# 
-#   })
-# 
-# 
-#   output$choicePanel2 <- renderText({
-#                             if (input$usersAnalysisType != "eFAST")
-#                             {
-#                               paste0(input$usersAnalysisInput,"_", measures[2])
-#                               # secondMeasurePrint = paste0(input$usersAnalysisInput,"_", measures[2])
-#                               # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  = secondMeasurePrint,
-#                               #                                  "maxProbabilityOfAdhesion" = secondMeasurePrint,
-#                               #                                  "stableBindProbability" = secondMeasurePrint,
-#                               #                                  "maxChemokineExpressionValue" = secondMeasurePrint,
-#                               #                                  "initialChemokineExpressionValue" = secondMeasurePrint,
-#                               #                                  "chemokineExpressionThreshold" = secondMeasurePrint,
-#                               #                                  "polarPlot" = secondMeasurePrint)
-#                             }  
-#                             else NULL
-#           
-#   })
-#   
-#   output$choicePanel3 <- renderText({
-#                             if (input$usersAnalysisType == "Robustness")
-#                             {
-#                               paste0(input$usersAnalysisInput, "_ATestResults")
-#                               # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  = paste0(input$usersAnalysisInput, "_ATestResults"),
-#                               #                                  "maxProbabilityOfAdhesion" = paste0(input$usersAnalysisInput, "_ATestResults"),
-#                               #                                  "stableBindProbability" = paste0(input$usersAnalysisInput, "_ATestResults"),
-#                               #                                  "maxChemokineExpressionValue" = paste0(input$usersAnalysisInput, "_ATestResults"),
-#                               #                                  "initialChemokineExpressionValue" = paste0(input$usersAnalysisInput, "_ATestResults"),
-#                               #                                  "chemokineExpressionThreshold" = paste0(input$usersAnalysisInput, "_ATestResults"))
-#                             }   
-#                             else NULL
-# })
+
 
 
  observeEvent(input$showGraphs, 
              {
-                shinyjs::disable("usersAnalysisType")
+                shinyjs::show("dispGraph")
                 shinyjs::disable("filePath")
                 shinyjs::disable("measures")
                 shinyjs::disable("measureScale")
                 shinyjs::show("selectUI")
                 shinyjs::show("changingTabs")
-                #appendTab(inputId = "changingTabs", tab = tabPanel(textOutput( paste0(input$usersAnalysisInput,"_", measures[3])))) #In the tab part can add the value part for what the measure is
-                #appendTab(inputId = "changingTabs", tab = tabPanel(wellsee)) #In the tab part can add the value part for what the measure is
-                # output$Graph <- renderImage({
-                #                   if (input$usersAnalysisType == "Latin-Hypercube"){
-                #                     shinyjs::show("changingTabs")
-                #                     list(src = paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[1],".png"),
-                #                          alt = paste("Image has not loaded"))
-                #                     # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  =   list(src = paste0(LHCFilePathFull, "/adhesionFactorExpressionSlope_", measures[1],".png"),
-                #                     #                                                                            alt = paste("Image has not loaded")),
-                #                     #                                  "maxProbabilityOfAdhesion" =   list(src = paste0(LHCFilePathFull, "/maxProbabilityOfAdhesion_", measures[1], ".png"),
-                #                     #                                                                      alt = paste("Image has not loaded")),
-                #                     #                                  "stableBindProbability" =   list(src = paste0(LHCFilePathFull, "/", parameterList[1], "_", measures[1], ".png"),
-                #                     #                                                                   alt = paste("Image has not loaded")),
-                #                     #                                  "maxChemokineExpressionValue" =   list(src = paste0(LHCFilePathFull, "/maxChemokineExpressionValue_", measures[1], ".png"),
-                #                     #                                                                      alt = paste("Image has not loaded")),
-                #                     #                                  "initialChemokineExpressionValue" =   list(src = paste0(LHCFilePathFull, "/initialChemokineExpressionValue_", measures[1], ".png"),
-                #                     #                                                                           alt = paste("Image has not loaded")),
-                #                     #                                  "chemokineExpressionThreshold" = list(src = paste0(LHCFilePathFull, "/chemokineExpressionThreshold_", measures[1], ".png"),
-                #                     #                                                                         alt = paste("Image has not loaded")),
-                #                     #                                  "polarPlot" = list(src = paste0(LHCFilePathFull, "/polarPlot_", measures[1], ".png"),
-                #                     #                                                     alt = paste("Image has not loaded")))
-                #                   }/home/fgch500/robospartan/LHCFiles
-                #                   else if (input$usersAnalysisType == "Robustness"){
-                #                     shinyjs::show("changingTabs")
-                #                     list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, "_", measures[1], ".png"),
-                #                          alt = paste("Image has not loaded"))
-                #                     # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  =   list(src = paste0(robustFilePathFull, "/adhesionFactorExpressionSlope_", measures[1], ".png"),
-                #                     #                                                                            alt = paste("Image has not loaded")),
-                #                     #        
-                #                     #        "maxProbabilityOfAdhesion" =   list(src = paste0(robustFilePathFull, "/maxProbabilityOfAdhesion_", measures[1], ".png"),
-                #                     #                                                                      alt = paste("Image has not loaded")),
-                #                     #                                  "stableBindProbability" =   list(src = paste0(robustFilePathFull, "/stableBindProbability_", measures[1], ".png"),
-                #                     #                                                                   alt = paste("Image has not loaded")),
-                #                     #                                  "maxChemokineExpressionValue" =   list(src = paste0(robustFilePathFull, "/maxChemokineExpressionValue_", measures[1], ".png"),
-                #                     #                                                                         alt = paste("Image has  not loaded")),
-                #                     #                                  "initialChemokineExpressionValue" =   list(src = paste0(robustFilePathFull, "/initialChemokineExpressionValue_", measures[1], ".png"),
-                #                     #                                                                             alt = paste("Image has not loaded")),
-                #                     #                                  "chemokineExpressionThreshold" = list(src = paste0(robustFilePathFull, "/chemokineExpressionThreshold_", measures[1], ".png"),
-                #                     #                                                                        alt = paste("Image has not loaded"))
-                #                     #                                 )
-                #                     #                           
-                #                   }
-                #                   else if (input$usersAnalysisType == "eFAST"){
-                #                     shinyjs::hide("changingTabs") #eFAST doesn't require any of the tabs to be used 
-                #                     if (input$usersAnalysisInput == measures[1])
-                #                     {
-                #                       list(src = paste0(eFASTFilePath, "/", measures[1],".png"),
-                #                            alt = paste("Image has not loaded"))
-                #                     }
-                #                     else if (input$usersAnalysisInput == measures[2])
-                #                     {
-                #                       list(src = paste0(eFASTFilePath, "/", measures[2], ".png"),
-                #                            alt = paste("Image has not loaded"))
-                #                     }
-                #                     # switch(input$usersAnalysisInput, "Velocity" = list(src = paste0(eFASTFilePath, "/", measures[1],".png"),
-                #                     #                                                    alt = paste("Image has not loaded")),
-                #                     #                                  "Displacement" = list(src = paste0(eFASTFilePath, "/", measures[2], ".png"),
-                #                     #                                                        alt = paste("Image has not loaded")))
-                #                     }
-                #  
-                #  }, deleteFile = FALSE)
-                # 
-                # output$Graph2 <- renderImage({
-                #                    if (input$usersAnalysisType == "Latin-Hypercube"){
-                #                      list(src = paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", measures[2], ".png"),
-                #                           alt = paste("Image has not loaded"))
-                #                       # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  =  list(src = paste0(LHCFilePathFull, "/adhesionFactorExpressionSlope_", measures[2], ".png"),
-                #                       #                                                                           alt = paste("Image has not loaded")),
-                #                       #                                  "maxProbabilityOfAdhesion" = list(src = paste0(LHCFilePathFull, "/maxProbabilityOfAdhesion_", measures[2], ".png"),
-                #                       #                                                                    alt = paste("Image has not loaded")),
-                #                       #                                  "stableBindProbability" =  list(src = paste0(LHCFilePathFull, "/stableBindProbability_", measures[2], ".png"),
-                #                       #                                                                  alt = paste("Image has not loaded")),
-                #                       #                                  "maxChemokineExpressionValue" =  list(src = paste0(LHCFilePathFull, "/maxChemokineExpressionValue_", measures[2], ".png"),
-                #                       #                                                                        alt = paste("Image has not loaded")),
-                #                       #                                  "initialChemokineExpressionValue" = list(src = paste0(LHCFilePathFull, "/initialChemokineExpressionValue_", measures[2], ".png"),
-                #                       #                                                                           alt = paste("Image has not loaded")),
-                #                       #                                  "chemokineExpressionThreshold" = list(src = paste0(LHCFilePathFull, "/chemokineExpressionThreshold_", measures[2], ".png"),
-                #                       #                                                                        alt = paste("Image has not loaded")),
-                #                       #                                  "polarPlot" = list(src = paste0(LHCFilePathFull, "/polarPlot_", measures[2], ".png"),
-                #                       #                                                     alt = paste("Image has not loaded")))
-                #                    }
-                #                    else if (input$usersAnalysisType == "Robustness"){
-                #                      list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, "_", measures[2], ".png"),
-                #                           alt = paste("Image has not loaded"))
-                #                      # switch(input$usersAnalysisInput, "adhesionFactorExpressionSlope"  =  list(src = paste0(robustFilePathFull, "/adhesionFactorExpressionSlope_", measures[2], ".png"),
-                #                      #                                                                           alt = paste("Image has not loaded")),
-                #                      #                                  "maxProbabilityOfAdhesion" = list(src = paste0(robustFilePathFull, "/maxProbabilityOfAdhesion_", measures[2], ".png"),
-                #                      #                                                                    alt = paste("Image has not loaded")),
-                #                      #                                  "stableBindProbability" =  list(src = paste0(robustFilePathFull, "/stableBindProbability_", measures[2], ".png"),
-                #                      #                                                                  alt = paste("Image has not loaded")),
-                #                      #                                  "maxChemokineExpressionValue" =  list(src = paste0(robustFilePathFull, "/maxChemokineExpressionValue_", measures[2], ".png"),
-                #                      #                                                                        alt = paste("Image has not loaded")),
-                #                      #                                  "initialChemokineExpressionValue" = list(src = paste0(robustFilePathFull, "/initialChemokineExpressionValue_", measures[2], ".png"),
-                #                      #                                                                           alt = paste("Image has not loaded")),
-                #                      #                                  "chemokineExpressionThreshold" = list(src = paste0(robustFilePathFull, "/chemokineExpressionThreshold_", measures[2], ".png"),
-                #                      #                                                                        alt = paste("Image has not loaded")))
-                #                            
-                #                    }
-                #          
-                #   
-                #   
-                # }, deleteFile = FALSE)
-                # 
-                # output$Graph3 <- renderImage({
-                #                   if (input$usersAnalysisType == "Robustness")
-                #                   {
-                #                     list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, ".png"),
-                #                          alt = paste("Image has not loaded"))
-                #                     # switch(input
-                #                     #        $usersAnalysisInput, "adhesionFactorExpressionSlope"  =  list(src = paste0(robustFilePathFull, "/adhesionFactorExpressionSlope.png"),
-                #                     #                                                                           alt = paste("Image has not loaded")),
-                #                     #                                  "maxProbabilityOfAdhesion" = list(src = paste0(robustFilePathFull, "/maxProbabilityOfAdhesion.png"),
-                #                     #                                                                    alt = paste("Image has not loaded")),
-                #                     #                                  "stableBindProbability" =  list(src = paste0(robustFilePathFull, "/stableBindProbability.png"),
-                #                     #                                                                  alt = paste("Image has not loaded")),
-                #                     #                                  "maxChemokineExpressionValue" =  list(src = paste0(robustFilePathFull, "/maxChemokineExpressionValue.png"),
-                #                     #                                                                        alt = paste("Image has not loaded")),
-                #                     #                                  "initialChemokineExpressionValue" = list(src = paste0(robustFilePathFull, "/initialChemokineExpressionValue.png"),
-                #                     #                                                                           alt = paste("Image has not loaded")),
-                #                     #                                  "chemokineExpressionThreshold" = list(src = paste0(robustFilePathFull, "/chemokineExpressionThreshold.png"),
-                #                     #                                                                        alt = paste("Image has not loaded"))
-                #                     #                                 )
-                #                   }
-                #                   else NULL
-                # }, deleteFile = FALSE)
-                # 
+                shinyjs::show("changingMeasures")
+                
+                shinyjs::show("changingMeasures")
+
+                if (input$usersAnalysisType == "eFAST")
+                {
+                  shinyjs::hide("selectUI") #Parameters are not required for eFAST graphs
+                }
+                if (input$usersAnalysisType == "Robustness")
+                {
+                  measures<<- c(measures, "A-Test Results")
+                }
+                updateSelectInput(session, inputId = "changingMeasures", choices = measures)
+
              })
 
 
