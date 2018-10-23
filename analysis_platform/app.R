@@ -15,7 +15,7 @@ library(ggplot2)
 #LHCFilePathFull <<- "/home/fgch500/robospartan/LHCFiles"
 #/home/fgch500/robospartan/argosFiles/LHCStuff
 #robustFilePathFull <<- "/home/fgch500/robospartan/robustnessFiles"
-#eFASTFilePath <<- "4"
+#eFASTFilePath <<- "/home/fgch500/robospartan/eFASTfiles/eFAST_Sample_Outputs"
 LHCFilePathFull <<- ""
 robustFilePathFull <<- ""
 eFASTFilePath <<- ""
@@ -120,10 +120,7 @@ ui <- fluidPage(
            h4("File Declarations:"),
 
             fileInput(inputId = "AllResults",
-                      label = "All Simulation Results File"),
-           
-            fileInput(inputId = "ParameterFile",
-                      label = "Simulations Parameter File:")
+                      label = "All Simulation Results File")
            
          ),
          
@@ -209,7 +206,6 @@ server <- function(input, output, session) {
   shinyjs::hide("dispGraph")
   #shinyjs::hide("showGraph")
   shinyjs::hideElement("lastWell")
-  shinyjs::hide("ParameterFile")
   shinyjs::hide("AllResults")
   
   output$parameter_table<-renderTable({
@@ -237,20 +233,7 @@ server <- function(input, output, session) {
                  }
                })
   
-  observeEvent(input$ParameterFile,
-               {
-                 if (input$ParameterFile$type == "text/csv")
-                 {
-                   shinyjs::showElement("lastWell")
-                 }
-                 else
-                 {
-                   showModal(modalDialog(
-                     title = "Wrong File Format",
-                     "This file must be a .csv file"))
-                   shinyjs::hideElement("lastWell")
-                 }
-               })
+ 
   
   observeEvent(input$filePaths,
                {
@@ -265,18 +248,15 @@ server <- function(input, output, session) {
                                                      "eFAST" = eFASTFilePath <<- input$filePaths)
                      if(input$usersAnalysisType == "Robustness")
                      {
-                       shinyjs::hide("ParameterFile")
                        shinyjs::show("AllResults")
                      }
                      else if(input$usersAnalysisType == "eFAST")
                      {
-                       shinyjs::hide("ParameterFile")
                        shinyjs::hide("AllResults")
                        shinyjs::show("lastWell")
                      }
                      else if (input$usersAnalysisType == "Latin-Hypercube")
                      {
-                       shinyjs::show("ParameterFile")
                        shinyjs::show("AllResults")
                      }
                      
@@ -287,7 +267,6 @@ server <- function(input, output, session) {
                      fileName <<- FALSE
                      shinyjs::show("filePathFalse")
                      shinyjs::hide("filePathTrue")
-                     shinyjs::hide("ParameterFile")
                      shinyjs::hide("AllResults")
                    }
                  }
@@ -392,18 +371,15 @@ server <- function(input, output, session) {
                     title = "Creating Summary",
                     "Summary files are being created..."))
                     #print(input$AllResults)
-                    #print(input$ParameterFile$datapath)
                     checkIfSummaryNeeded <- read.csv(input$AllResults$datapath, stringsAsFactors = FALSE, row.names = NULL)
                     if (checkIfSummaryNeeded[1,1] == checkIfSummaryNeeded[2,1])
                     {
                       print(input$AllResults$name)
                       print(LHCFilePathFull)
-                      print(input$ParameterFile$name)
                       print(lhcSummary)
                       print(parameterList)
                       print(measures)
-                      #summary <- lhc_generateLHCSummary(filepath, parameterList, measures,input$AllResults$datapath, lhcSummaryFull, input$ParameterFile$datapath) 
-                      summary <- lhc_generateLHCSummary(LHCFilePathFull, parameterList, measures, input$AllResults$name, lhcSummary, input$ParameterFile$name) 
+                      summary <- lhc_generateLHCSummary(LHCFilePathFull, parameterList, measures, input$AllResults$name, lhcSummary) 
                       showModal(modalDialog(
                         title = "Complete",
                         "Summary files have been created"))
@@ -437,7 +413,7 @@ server <- function(input, output, session) {
                      title = "Creating Results",
                      "Overall medians result file are being created..."
                    ))
-                   efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures)
+                   efast_get_overall_medians(eFASTFilePath, input$num_curves, parameterList, input$num_samples, measures)
                    showModal(modalDialog(
                      title = "Complete",
                      "Overall medians result file have been created"
@@ -549,9 +525,9 @@ server <- function(input, output, session) {
                      "Graphs are being generated..."))
                    print(input$AllResults$datapath)
                    oat_graphATestsForSampleSize(robustFilePathFull, parameterList, measures, input$aTestSig, paste0(input$ATestFileName, ".csv"), baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png"))
-                   #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
-                   
-                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, input$AllResults$name, baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
+                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
+                   print(measure_scale)
+                   #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, input$AllResults$name, baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
                    showModal(modalDialog(
                      title = "Complete",
                      "Graphs have been generated"))
@@ -563,7 +539,9 @@ server <- function(input, output, session) {
                     title = "Generating Graphs",
                     "Graphs are being generated..."))
                   print(input$ttest_conf)
-                  efast_run_Analysis(eFASTFilePath, measures, parameterList, input$num_curves, input$num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"))  
+                  print(measures)
+                  print(parameterList)
+                  efast_run_Analysis(eFASTFilePath, measures, parameterList, input$num_curves, input$num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
                   showModal(modalDialog(
                     title = "Complete",
                     "Graphs have been generated"))
