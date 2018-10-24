@@ -203,7 +203,7 @@ ui <- fluidPage(
         br(),
         downloadButton(outputId = "settingFile", label = "Download settings"),
         downloadButton(outputId = "lhc_sample", label = "Download data"),
-        
+       
         
         width=7
       )
@@ -322,7 +322,26 @@ server <- function(input, output, session) {
       "Settings.csv"
     },
     content = function(file) { 
-      write_csv(cbind(data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+      analysis_type = input$analysisType
+      if (input$analysisType == "Robustness")
+      {
+        number_of_samples = "N/A"
+      }
+      else
+      {
+        number_of_samples = input$numSamples
+      }
+      
+      if (input$analysisType == "eFAST")
+      {
+        number_of_curves = input$numCurves
+      }
+      else
+      {
+        number_of_curves = "N/A"
+      }
+      #write_csv(cbind(input$analysisType, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
     }
   )
   
@@ -390,7 +409,8 @@ server <- function(input, output, session) {
      {
       if (!is.null(input$argosFiles$datapath) && sampleCreated){
          #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
-         directory <<- input$argosDirectory
+         dir.create(file.path(input$argosDirectory, "/experiments"))
+         directory <<- paste0(input$argosDirectory, "/experiments")
          #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
          zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
          zipName <- input$zipName
@@ -399,7 +419,7 @@ server <- function(input, output, session) {
          showModal(modalDialog(
            title = "Creating ARGoS Files",
            "ARGoS files are being created..."))
-         make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation,zipName))
+         make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation, "/", zipName))
          shinyjs::show("cluster")
       }
        
@@ -412,81 +432,90 @@ server <- function(input, output, session) {
   )
       
   #### Action when Create Sample is pressed
-  observeEvent(
-    input$createSample,
+  observeEvent(input$createSample,
     {
-      result <<- NULL
-      sampleCreated <<- TRUE
-      #measures <<- c("Velocity", "Displacement")
-      shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
-      shinyjs::show("settingFile")
-      
-      if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
+      if (length(measures) > 0)
       {
-        myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
-        myValues$sampleGenerated<<-TRUE
-        columnNames <<- c(parameters)
-        result<<-myValues$sample #required when the user wishes to download the analysis
-        if (length(wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
-        {
-          for (i in wholeNumbers)
-          {
-            result [ ,i] <<- round(result[ ,i])
-          }
-        }
-        output$sample_header <- renderUI({ h4("Generated Sample:") })
-        output$sample <- DT::renderDataTable(
-          DT::datatable(data = result, 
-                        options = list(pageLength = 10, searching=FALSE), 
-                        rownames = FALSE, colnames = columnNames))
-      }
-      
-      else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
-      {
-        myValues$sample <<- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, parameters, mins, maxs, write_csv = FALSE, return_sample = TRUE)
-        myValues$sampleGenerated<<-TRUE
-        print("eFAST can work")
+        result <<- NULL
+        sampleCreated <<- TRUE
+        #measures <<- c("Velocity", "Displacement")
+        shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
+        shinyjs::show("settingFile")
         
-        for(param in 1:length(parameters)) #iterate through each parameter chosen
+        if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
         {
-          for(c in 1:input$numCurves) #iterate for the number of curves chosen 
-          {  
-            result <<- rbind(result, cbind(myValues$sample[,  , param,c], parameters[param], c))
+          myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
+          myValues$sampleGenerated<<-TRUE
+          columnNames <<- c(parameters)
+          result<<-myValues$sample #required when the user wishes to download the analysis
+          if (length(wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
+          {
+            for (i in wholeNumbers)
+            {
+              result [ ,i] <<- round(result[ ,i])
+            }
           }
+          output$sample_header <- renderUI({ h4("Generated Sample:") })
+          output$sample <- DT::renderDataTable(
+            DT::datatable(data = result, 
+                          options = list(pageLength = 10, searching=FALSE), 
+                          rownames = FALSE, colnames = columnNames))
         }
-        columnNames <<- c(parameters, "Parameter of Interest", "Curve")
-        output$sample_header <- renderUI({ h4("Generated Sample:") })
-        output$sample <- DT::renderDataTable(
-          DT::datatable(data = result,
-                        options = list(pageLength = 10, searching=FALSE),
-                        rownames = FALSE, colnames = columnNames))
-       }
-       
-      else if(input$analysisType == "Robustness")
-      {
-        myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, baselines, mins, maxs, increments, write_csv = FALSE, return_sample = TRUE)
-        myValues$sampleGenerated<<-TRUE
-        for(param in 1:length(myValues$sample))
+        
+        else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
         {
-          result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
+          myValues$sample <<- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, parameters, mins, maxs, write_csv = FALSE, return_sample = TRUE)
+          myValues$sampleGenerated<<-TRUE
+          print("eFAST can work")
+          
+          for(param in 1:length(parameters)) #iterate through each parameter chosen
+          {
+            for(c in 1:input$numCurves) #iterate for the number of curves chosen 
+            {  
+              result <<- rbind(result, cbind(myValues$sample[,  , param,c], parameters[param], c))
+            }
+          }
+          columnNames <<- c(parameters, "Parameter of Interest", "Curve")
+          output$sample_header <- renderUI({ h4("Generated Sample:") })
+          output$sample <- DT::renderDataTable(
+            DT::datatable(data = result,
+                          options = list(pageLength = 10, searching=FALSE),
+                          rownames = FALSE, colnames = columnNames))
         }
-        columnNames <<- c(parameters, "Parameter of Interest")
-        output$sample_header <- renderUI({ h4("Generated Sample:") })
-        output$sample <- DT::renderDataTable(
-          DT::datatable(data = result,
-                        options = list(pageLength = 10, searching=FALSE),
-                        rownames = FALSE, colnames = columnNames))
-      }  
-      
-      else #this case gets called when latin-hypercube or eFAST have incorrect number of samples
+        
+        else if(input$analysisType == "Robustness")
+        {
+          myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, baselines, mins, maxs, increments, write_csv = FALSE, return_sample = TRUE)
+          myValues$sampleGenerated<<-TRUE
+          for(param in 1:length(myValues$sample))
+          {
+            result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
+          }
+          columnNames <<- c(parameters, "Parameter of Interest")
+          output$sample_header <- renderUI({ h4("Generated Sample:") })
+          output$sample <- DT::renderDataTable(
+            DT::datatable(data = result,
+                          options = list(pageLength = 10, searching=FALSE),
+                          rownames = FALSE, colnames = columnNames))
+        }  
+        
+        else #this case gets called when latin-hypercube or eFAST have incorrect number of samples
+        {
+          showModal(modalDialog(
+            title = "Incorrect number of samples",
+            "Number of samples should be numeric"))
+          shinyjs::disable("createARGoSFiles") 
+          
+        }
+      }
+      else
       {
         showModal(modalDialog(
-          title = "Incorrect number of samples",
-          "Number of samples should be numeric"))
-        shinyjs::disable("createARGoSFiles") 
-        
+          title = "No Measures",
+          "You must have at least one measure defined before creating the sample"))
       }
     }
+     
   )
 
   observeEvent(

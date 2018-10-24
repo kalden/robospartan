@@ -49,6 +49,7 @@ clearMeasureCount <<- 2
 #previousChoice <<- NULL
 k <<- 0 
 graphs <<- c()
+disableCounter <<- 0
 
 
 ui <- fluidPage(
@@ -99,6 +100,7 @@ ui <- fluidPage(
         
         wellPanel(id = "measuresWell",
                   h4("Measure Scales:"),
+                  checkboxInput(inputId = "ifMeasureScale", label = "Click thix box if you would like to choose your measure scales, else they will be 'N/A'"),
                   textInput(inputId = "measureScale",
                             label = "Choose Your Measure Scales:",
                             value = ""),
@@ -263,7 +265,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$AllResults,
                {
-                 if (input$usersAnalysisType != "eFAST")
+                 if (input$usersAnalysisType != "eFAST") #So for LHC and Robustness
                  {
                    if (input$AllResults$type == "text/csv")
                    {
@@ -276,6 +278,27 @@ server <- function(input, output, session) {
                        "This file must be a .csv file"))
                      shinyjs::hideElement("lastWell")
                    }
+                  #This part makes sure the settings file and results files are correct against each other before allowing the user to progress 
+                  resultsFileHeaders <<- c()
+                  resultsFileCheck <- read.csv(input$AllResults$datapath, header = FALSE)
+                  for (checkerCounter in 1:(length(resultsFileCheck[1, ])))
+                  {
+                    if (toString(resultsFileCheck[1,checkerCounter]) != "Parameter.of.Interest") #Dont want this header included here
+                    {
+                      resultsFileHeaders <- c(resultsFileHeaders, gsub( " ", "", toString(resultsFileCheck[1,checkerCounter])))
+                    }
+                  }
+                  settingsCombinedParamsAndMeasures <<- c(measures, parameterList)
+                  print(resultsFileHeaders)
+                  print(settingsCombinedParamsAndMeasures)
+                  #print(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures))
+                  if (length(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures)) != length(settingsCombinedParamsAndMeasures))
+                  {
+                    showModal(modalDialog(
+                      title = "Error",
+                      "Summary file and Results file's parameters and measures do not match"))
+                    shinyjs::hideElement("lastWell")
+                  }
                  }
                  
                  else
@@ -347,7 +370,7 @@ server <- function(input, output, session) {
                    required <<- c()
                    x = 0
                    while (x < (length(measures) - length(measureScale)))
-                   {
+                   { 
                      required <- c(required, "REQUIRED")
                      x = x+1
                    }
@@ -418,6 +441,11 @@ server <- function(input, output, session) {
                      i <- i+1 
                      columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-10))
                    }
+                   for (j in 1:length(measures))
+                   {
+                     measureScale <<- c(measureScale, "N/A")
+                   }
+                   print(measureScale)
                    myValues$table <- rbind(isolate(myValues$table), cbind(parameterList,minvals,maxvals,incvals,baseline))
                    measureValues$table <- matrix(c("Measures:", measures), nrow = 1, byrow = TRUE)
                    colnames(measureValues$table) <- columnNamesMeasures
@@ -521,6 +549,35 @@ server <- function(input, output, session) {
                    "Coefficients files have been created"))
                })
   
+  observeEvent(input$ifMeasureScale,
+               {
+                 if(input$ifMeasureScale == TRUE)
+                 {
+                   shinyjs::show("measureScale")
+                   shinyjs::show("addMeasureScale")
+                   shinyjs::show("clearMeasureScales")
+                   measureScale <<- c()
+                   
+                 }
+                 else
+                 {
+                   disableCounter <<- disableCounter + 1
+                   shinyjs::hide("measureScale")
+                   shinyjs::hide("addMeasureScale")
+                   shinyjs::hide("clearMeasureScales")
+                   if (disableCounter > 1) #ensures that it does not disable this when the app starts
+                   {
+                     shinyjs::disable("ifMeasureScale")
+                   }
+                  
+                   for (j in 1:length(measures))
+                   {
+                     measureScale <<- c(measureScale, "N/A")
+                   }
+                 }
+               }
+              )
+  
   observeEvent(input$usersAnalysisType,
                if(input$usersAnalysisType == "Robustness")
                {
@@ -529,8 +586,6 @@ server <- function(input, output, session) {
                  shinyjs::show("ATestFileName")
                  shinyjs::hide("eFASTResultsFileName")
                  shinyjs::hide("corCoeffsFileName")
-                 shinyjs::show("measureScale")
-                 shinyjs::show("addMeasureScale")
                  shinyjs::showElement("Extras")
                  shinyjs::show("aTestSig")
                  shinyjs::hide("ttest_conf")
@@ -548,8 +603,6 @@ server <- function(input, output, session) {
                  shinyjs::hide("ATestFileName")
                  shinyjs::show("eFASTResultsFileName")
                  shinyjs::hide("corCoeffsFileName")
-                 shinyjs::hide("measureScale")
-                 shinyjs::hide("addMeasureScale") 
                  shinyjs::showElement("Extras")
                  shinyjs::hide("aTestSig")
                  shinyjs::show("ttest_conf")
@@ -569,8 +622,6 @@ server <- function(input, output, session) {
                  shinyjs::hide("ATestFileName")
                  shinyjs::hide("eFASTResultsFileName")
                  shinyjs::show("corCoeffsFileName")
-                 shinyjs::show("measureScale")
-                 shinyjs::show("addMeasureScale")
                  shinyjs::hideElement("Extras")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
@@ -590,7 +641,7 @@ server <- function(input, output, session) {
                    showModal(modalDialog(
                      title = "Generating Graphs",
                      "Graphs are being generated..."))
-                   lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, input$corCoeffsFileName, lhcSummary, OUTPUT_TYPE = "PNG")
+                   lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measureScale, input$corCoeffsFileName, lhcSummary, OUTPUT_TYPE = "PNG")
                    #POLAR PLOT CURRENTLY GIVING AN ERROR 
                    lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
                    #lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, "LHC_corCoeffs", lhcSummary, OUTPUT_TYPE = "PNG")
@@ -608,7 +659,7 @@ server <- function(input, output, session) {
                    oat_graphATestsForSampleSize(robustFilePathFull, parameterList, measures, input$aTestSig, paste0(input$ATestFileName, ".csv"), baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png"))
                    #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
                    print(baseline)
-                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, input$AllResults$name, baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
+                   oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measureScale, input$AllResults$name, baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
                    
                    showModal(modalDialog(
                      title = "Complete",
