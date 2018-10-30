@@ -117,17 +117,17 @@ ui <- fluidPage(
       div(tableOutput("measures_table"),style = "font-size:90%"),
       selectInput(inputId = "whichData",
                   label = NULL,
-                  choices = c("Partitioned Data", "Algorithm Settings", "Generated Ensembles and Emulators")),
+                  choices = c("Algorithm Settings - Network Structures", "Generated Ensembles and Emulators")),
       #div(tableOutput( uiOutput("choiceTable")),style="font-size:90%"),
-      tabsetPanel(id = "PartitionedData_tabs", type = "tabs",
-                  tabPanel(title = "Training"),
-                  tabPanel(title = "Testing"),
-                  tabPanel(title = "Validation"),
-                  tabPanel(title = "Pre Normed Values")
-                  ),
-      tabsetPanel(id = "AlgorithmSettings_tabs", type = "tabs",
-                  tabPanel(title = "Settings"),
-                  tabPanel(title= "Network Structures")),
+      # tabsetPanel(id = "PartitionedData_tabs", type = "tabs",
+      #             tabPanel(title = "Training"),
+      #             tabPanel(title = "Testing"),
+      #             tabPanel(title = "Validation"),
+      #             tabPanel(title = "Pre Normed Values")
+      #             ),
+      # tabsetPanel(id = "AlgorithmSettings_tabs", type = "tabs",
+      #             tabPanel(title = "Settings"),
+      #             tabPanel(title= "Network Structures")),
       wellPanel(id = "graphSettingsWell",
                 selectInput(inputId = "graphSelect",
                             label = "Select Graph",
@@ -140,7 +140,7 @@ ui <- fluidPage(
                             choices = ""),
                 actionButton(inputId = "showGraph", label = "Show Graph")
       ),
-      div(tableOutput("PartitionedData_table"),style="font-size:90%"),
+      #div(tableOutput("PartitionedData_table"),style="font-size:90%"),
       div(tableOutput("NetStructs_table"), style = "font-size:90%"),
       div(tableOutput("AlgorithmSettings_table"),style="font-size:90%"),
       div(tableOutput("Emulations_table"),style="font-size:90%"),
@@ -155,6 +155,7 @@ server <- function(input, output, session) {
   myValues <- reactiveValues() 
   PartitionedData_table <-reactiveValues()
   AlgorithmSettings_table <-reactiveValues()
+  options(shiny.maxRequestSize=100*1024^2)
   shinyjs::disable("ensembles")
   shinyjs::disable("algSet")
   shinyjs::hide("whichData")
@@ -228,13 +229,27 @@ server <- function(input, output, session) {
   
   observeEvent(input$addNetStruct,
                {
-                 shinyjs::show("NetStructs_table")
-                 networkStructures[[count]]<<-c(input$netStructText)
-                 print(networkStructures)
-                 updateTextInput(session, inputId = "netStructText", value = "")
-                 userNetStruct <-cbind(userNetStruct, networkStructures)
-                 output$NetStructs_table <- renderTable(userNetStruct, striped = TRUE, bordered = TRUE)
-                 count <<- count+1
+                 if (input$netStructText != "")
+                 {
+                   stringTing <- toString(input$netStructText)
+                   if (grepl(" ", stringTing, fixed = TRUE) == F) #Checking the user hasnt used a space
+                   {
+                     shinyjs::show("NetStructs_table")
+                     networkStructures[[count]]<<-c(input$netStructText)
+                     print(networkStructures)
+                     updateTextInput(session, inputId = "netStructText", value = "")
+                     userNetStruct <-cbind(userNetStruct, networkStructures)
+                     output$NetStructs_table <- renderTable(userNetStruct, striped = TRUE, bordered = TRUE)
+                     count <<- count+1
+                   }
+                   else 
+                   {
+                     showModal(modalDialog(
+                       title = "No Spaces",
+                       paste0("No spaces allowed when defining network structures")))
+                   }
+                 }
+                 
                })
   
   observeEvent(input$clearNetStruct,
@@ -246,53 +261,68 @@ server <- function(input, output, session) {
   observeEvent(input$partitionDataset,
                {
                  shinyjs::hide("NetStructs_table")
-                 newData <- input$simData$datapath
-                 print(newData)
-                 #partitionedData <<- partition_dataset(sim_data_for_emulation, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
-                 #partitionedData <<- partition_dataset(newData, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 showModal(modalDialog(
+                   title = "Partitioning Data",
+                   paste0("Data is currently being partitioned...")))
+                 #newData <- input$simData$datapath
+                 simDataset <-read.csv(input$simData$datapath, header = TRUE)
+                 lister <<- c()
+                 dataRemoved <<- FALSE
+                 print(simDataset)
+                 for (i in 1:(length(simDataset[1, ])))
+                 {
+                   if(min(simDataset[i]) == max(simDataset[i]))
+                   {
+                     lister <- c(lister, colnames(simDataset[i]))
+                     dataRemoved <<- TRUE
+                   }
+                 }
+                 listerString <- toString(lister)
+                 print(measures)
+                 print(parameterList)
                  print(sampleMins)
                  print(sampleMaxes)
-                 partitionedData <<- partition_dataset("/home/fgch500/robospartan/argosFiles/LHCStuff/LHCcombinedParamsAndResults.csv", parameterList, percent_train = 75, percent_test = 15, percent_validation = 10, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
-                 print(partitionedData)  
-                 showModal(modalDialog(
-                   title = "Complete",
-                   "Data has been successfully partitioned"))
+                 #partitionedData <<- partition_dataset(sim_data_for_emulation, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 partitionedData <<- partition_dataset(simDataset, parameterList, measures, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 {}  
+                 if (dataRemoved == TRUE)
+                 {
+                   showModal(modalDialog(
+                     title = "Complete",
+                     paste0("Data has been successfully partitioned. The parameter(s) ", listerString,", have not been partitioned. This is due to their values all being identical.")))
+                 }
+                 else 
+                 {
+                   showModal(modalDialog(
+                     title = "Complete",
+                     paste0("All data has been successfully partitioned.")))
+                 }
+                
                  PartData <<- TRUE
                  #partition_data <<- get(load("/home/fgch500/robospartan/Machine_learning_emulator_app/partitioned_data.Rda"))
                  preNorms <<- cbind(partitionedData$pre_normed_mins, partitionedData$pre_normed_maxes)
-                 colnames(preNorms) <<- c("Pre Normed Mins", "Pre Normed Maxs")
-                 updateSelectInput(session, inputId = "whichData", selected = "Partitioned Data")
-                 updateTabsetPanel(session, inputId = "PartitionedData_tabs", selected = "Training")
-                 shinyjs::show("PartitionedData_table")
-                 shinyjs::hide("whichData")
-                 shinyjs::show("PartitionedData_tabs")
+                 if(!is.null(partitionedData)) 
+                 {
+                   colnames(preNorms) <<- c("Pre Normed Mins", "Pre Normed Maxs")
+                 }
+                 
                  shinyjs::enable("algSet")
+                 #print(partitionedData)
                }
                
   )
   
   
-  observeEvent(input$PartitionedData_tabs,
-               {
-                 
-                 shinyjs::hide("AlgorithmSettings_table")
-                 switch(input$PartitionedData_tabs, "Training" =  output$PartitionedData_table <- renderTable(partitionedData$training, striped = TRUE, bordered = TRUE, rownames = TRUE),
-                                                    "Testing" =  output$PartitionedData_table <- renderTable(partitionedData$testing, striped = TRUE, bordered = TRUE, rownames = TRUE),
-                                                    "Validation" = output$PartitionedData_table <- renderTable(partitionedData$validation, striped = TRUE, bordered = TRUE, rownames = TRUE),
-                                                    "Pre Normed Values" = output$PartitionedData_table <- renderTable(preNorms, striped = TRUE, bordered = TRUE, rownames = TRUE, colnames = TRUE))
-                
-               })
-  
   observeEvent(input$showGraph,
                {
-                 if (input$graphSelect == "Ensemble")
+                 if (input$graphSelect == "Ensemble")if(input$whichData == "Algorithm Settings")
                  {
                    testOrTrainVal = "Testing"
                  }
                  
                  else
                  {
-                   testOrTrainVal = input$testOrTrain
+                   testOrTrainVal = input$testOrTrain 
                  }
                  
                  print(paste0(input$graphSelect, "_", testOrTrainVal, "_", input$measureSelect, ".png"))
@@ -300,31 +330,6 @@ server <- function(input, output, session) {
                  output$Graph <-  renderImage(list(src = paste0(input$graphSelect, "_", testOrTrainVal, "_", input$measureSelect, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE)
                })
   
-  observeEvent(input$AlgorithmSettings_tabs,
-               {
-                 if (algsDone == TRUE)
-                 {
-                   shinyjs::hide("PartitionedData_table")
-                   print(str(networkStructures))
-                   settings <- cbind(algorithmSettings$num_trees, algorithmSettings$num_of_generations, algorithmSettings$num_of_folds, algorithmSettings$save_emulators, algorithmSettings$save_ensemble, algorithmSettings$plot_test_accuracy)
-                   colnames(settings)<-c("Number of Trees", "Number of Generations", "Number of Folds", "Save Emulators (1-True, 0-False)","Save Ensemble (1-True, 0-False)", "Plot Test Accuracy (1-True, 0-False)")
-                   if (structDone == TRUE)
-                   {
-                     for (networkNumber in 1:length(networkStructures))
-                     {
-                       indivStructure <- paste(unlist(networkStructures[[networkNumber]]), collapse = ', ') #Convert the list element into a string with comma seperation between the values
-                       netStruct <-rbind(netStruct, cbind(networkNumber, indivStructure))
-                     }
-                     colnames(netStruct) <- c("Network", "Structure")
-                   }
-                   
-                   switch(input$AlgorithmSettings_tabs, "Network Structures" =  output$AlgorithmSettings_table <- renderTable(netStruct, striped = TRUE, bordered = TRUE),
-                          "Settings" = output$AlgorithmSettings_table <- renderTable(settings, striped = TRUE, bordered = TRUE))
-                   #shinyjs::show("AlgorithmSettings_table")
-                 }
-                 
-
-               })
 
   
   observeEvent(input$algSet,
@@ -332,7 +337,7 @@ server <- function(input, output, session) {
                  if (structDone == TRUE)
                  {
                    algorithmSettings<<-emulation_algorithm_settings(network_structures=networkStructures)
-                   print(algorithmSettings)
+                  # print(algorithmSettings)
                    shinyjs::enable("ensembles")
                    showModal(modalDialog(
                      title = "Complete",
@@ -347,6 +352,27 @@ server <- function(input, output, session) {
                      title = "First Complete Network Structure",
                      "Network Structure needs completing before algorithm settings can be produced"))
                  }
+                 if (algsDone == TRUE)
+                 {
+                   shinyjs::hide("PartitionedData_table")
+                   #print(str(networkStructures))
+                   settings <- cbind(algorithmSettings$num_trees, algorithmSettings$num_of_generations, algorithmSettings$num_of_folds, algorithmSettings$save_emulators, algorithmSettings$save_ensemble, algorithmSettings$plot_test_accuracy)
+                   colnames(settings)<-c("Number of Trees", "Number of Generations", "Number of Folds", "Save Emulators (1-True, 0-False)","Save Ensemble (1-True, 0-False)", "Plot Test Accuracy (1-True, 0-False)")
+                   if (structDone == TRUE)
+                   {
+                     for (networkNumber in 1:length(networkStructures))
+                     {
+                       indivStructure <- paste(unlist(networkStructures[[networkNumber]]), collapse = ', ') #Convert the list element into a string with comma seperation between the values
+                       netStruct <-rbind(netStruct, cbind(networkNumber, indivStructure))
+                     }
+                     colnames(netStruct) <- c("Network", "Structure")
+                   }
+                   output$AlgorithmSettings_table <- renderTable(netStruct, striped = TRUE, bordered = TRUE)
+                   # switch(input$AlgorithmSettings_tabs, "Network Structures" =  output$AlgorithmSettings_table <- renderTable(netStruct, striped = TRUE, bordered = TRUE),
+                   #        "Settings" = output$AlgorithmSettings_table <- renderTable(settings, striped = TRUE, bordered = TRUE))
+                   updateSelectInput(session, inputId = "whichData", selected = "Algorithm Settings - Network Structures")
+                   shinyjs::show("AlgorithmSettings_table")
+                 }
                }
   )
   
@@ -358,7 +384,10 @@ server <- function(input, output, session) {
                      title = "Generating Emulators and Ensembles",
                      "Emulators and Ensembles are being generated..."))
                    print(measures)
-                   generated_ensemble<<-generate_emulators_and_ensemble(modelList, parameterList, measures, partitionedData, algorithm_settings = algorithmSettings, normalised=TRUE)
+                   print(partitionedData)
+                   #THIS IS HARD CODING THE NEW MEASURES TO THEN WORK
+                   measures <<- c("Items", "mPartitionLength", "ExploreTime", "NestTime", "SourceTime", "ExploreRate", "NestRate", "SourceRate",   "ItemsFound",       "ItemsLost",        "ItemsFoundRate",   "ItemsLostRate"      )
+                   generated_ensemble<<-generate_emulators_and_ensemble(modelList, parameterList, measures, partitionedData, algorithm_settings = algorithmSettings, normalised=TRUE, output_formats = c("png"))
                    print(generated_ensemble)
                    updateSelectInput(session, inputId = "graphSelect", choices = c("Ensemble", modelList))
                    updateSelectInput(session, inputId = "whichData", selected ="Generated Ensembles and Emulators")
@@ -366,7 +395,7 @@ server <- function(input, output, session) {
                    ensembleDone <<- TRUE
                    showModal(modalDialog(
                      title = "Complete",
-                     "Emulators and Ensembles have been generated"))
+                   "Emulators and Ensembles have been generated")) 
                  }
                  else
                  {
@@ -402,21 +431,9 @@ server <- function(input, output, session) {
   observeEvent(input$whichData,
                {
                  print(input$whichData)
-                 if(input$whichData == "Partitioned Data")
+                 if(input$whichData == "Algorithm Settings - Network Structures")
                  {
-                   if (PartData == TRUE)
-                   {
-                     shinyjs::show("PartitionedData_table")
-                     shinyjs::hide("AlgorithmSettings_table")
-                     shinyjs::hide("AlgorithmSettings_tabs")
-                     shinyjs::show("PartitionedData_tabs")
-                     shinyjs::hideElement("graphSettingsWell")
-                     shinyjs::show("Graph")
-                     updateTabsetPanel(session, inputId = "PartitionedData_tabs", selected = "Training")
-                   }
-                 }
-                 else if(input$whichData == "Algorithm Settings")
-                 {
+                   print(algsDone)
                    if (algsDone == TRUE)
                    {
                      shinyjs::show("AlgorithmSettings_table")
@@ -425,11 +442,12 @@ server <- function(input, output, session) {
                      shinyjs::hide("PartitionedData_tabs")
                      shinyjs::hideElement("graphSettingsWell")
                      shinyjs::hide("Graph")
-                     updateTabsetPanel(session, inputId = "AlgorithmSettings_tabs", selected = "Settings")
+                     #updateTabsetPanel(session, inputId = "AlgorithmSettings_tabs", selected = "Settings")
                    }
                  }
-                 else{
-                    shinyjs::hide("AlgorithmSettings_table")
+                 else if(input$whichData == "Generated Ensembles and Emulators")
+                   {
+                    shinyjs::show("AlgorithmSettings_table")
                     shinyjs::hide("PartitionedData_table")
                     shinyjs::hide("AlgorithmSettings_tabs")
                     shinyjs::hide("PartitionedData_tabs")
@@ -443,7 +461,7 @@ server <- function(input, output, session) {
                       showModal(modalDialog(
                         title = "Generate Emulators and Ensembles",
                         "Emulators and Ensembles must first be generated"))
-                      updateSelectInput(session, inputId = "whichData", selected = "Algorithm Settings")
+                      updateSelectInput(session, inputId = "whichData", selected = "Algorithm Settings - Network Structures")
                     }
                   }
                     
@@ -457,7 +475,7 @@ server <- function(input, output, session) {
                    #These first two lines ensures that the tables are reset, so if the user changing their settings file, the one and new values wont bind together. Instead only the new values will be shown.
                    myValues$table <- NULL
                    measureValues$table <- NULL
-                   i <<- 7 #Measures begin at column 7
+                   i <<- 10 #Measures begin at column 10
                    columnNamesMeasures <<- c("Measures")
                    settingsData <- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
                    print(settingsData)
@@ -468,7 +486,7 @@ server <- function(input, output, session) {
                    {
                      measures <<- c(measures, gsub(" ", "",settingsData[1,i]))#Add one instance of the measure name 
                      i <- i+1 
-                     columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-7))
+                     columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-10))
                    }
                    myValues$table <- rbind(isolate(myValues$table), cbind(parameterList,sampleMins,sampleMaxes))
                    measureValues$table <- matrix(c("Measures:", measures), nrow = 1, byrow = TRUE)
