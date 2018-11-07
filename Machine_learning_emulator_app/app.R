@@ -283,13 +283,14 @@ server <- function(input, output, session) {
                  print(sampleMins)
                  print(sampleMaxes)
                  #partitionedData <<- partition_dataset(sim_data_for_emulation, parameterList, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
-                 partitionedData <<- partition_dataset(simDataset, parameterList, measures, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = sampleMins, sample_maxes = sampleMaxes)
+                 partitionedData <<- partition_dataset(simDataset, parameterList, measures, percent_train = input$percentTrain, percent_test = input$percentTest, percent_validation = input$percentValidation, normalise = TRUE, sample_mins = rbind(sampleMins), sample_maxes = rbind(sampleMaxes))
                  {}  
                  if (dataRemoved == TRUE)
                  {
                    showModal(modalDialog(
                      title = "Complete",
-                     paste0("Data has been successfully partitioned. The parameter(s) ", listerString,", have not been partitioned. This is due to their values all being identical.")))
+                     paste0("Data has been successfully partitioned. The measure(s) ", listerString,", have not been partitioned. This is due to their values all being identical.")))
+                   measures <- measures[!measures %in% lister] #Remove the non partitioned measures as these will not be included in the graph options
                  }
                  else 
                  {
@@ -297,7 +298,7 @@ server <- function(input, output, session) {
                      title = "Complete",
                      paste0("All data has been successfully partitioned.")))
                  }
-                
+                 updateSelectInput(session, inputId = "measureSelect", choices = measures)
                  PartData <<- TRUE
                  #partition_data <<- get(load("/home/fgch500/robospartan/Machine_learning_emulator_app/partitioned_data.Rda"))
                  preNorms <<- cbind(partitionedData$pre_normed_mins, partitionedData$pre_normed_maxes)
@@ -312,10 +313,13 @@ server <- function(input, output, session) {
                
   )
   
+  observeEvent(input$testOrTrain, shinyjs::hide("Graph"))
+  
+  observeEvent(input$measureSelect, shinyjs::hide("Graph"))
   
   observeEvent(input$showGraph,
                {
-                 if (input$graphSelect == "Ensemble")if(input$whichData == "Algorithm Settings")
+                 if (input$graphSelect == "Ensemble")
                  {
                    testOrTrainVal = "Testing"
                  }
@@ -328,10 +332,10 @@ server <- function(input, output, session) {
                  print(paste0(input$graphSelect, "_", testOrTrainVal, "_", input$measureSelect, ".png"))
                  
                  output$Graph <-  renderImage(list(src = paste0(input$graphSelect, "_", testOrTrainVal, "_", input$measureSelect, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE)
+                 shinyjs::show("Graph")
                })
   
 
-  
   observeEvent(input$algSet,
                {
                  if (structDone == TRUE)
@@ -416,6 +420,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$graphSelect,
                {
+                 shinyjs::hide("Graph")
                  if (input$graphSelect == "Ensemble")
                  {
                    shinyjs::disable("testOrTrain")
@@ -473,11 +478,12 @@ server <- function(input, output, session) {
                  if (!is.null(input$settingsFile)) #Ensure a settings file has been chosen 
                  {
                    #These first two lines ensures that the tables are reset, so if the user changing their settings file, the one and new values wont bind together. Instead only the new values will be shown.
-                   myValues$table <- NULL
-                   measureValues$table <- NULL
+                   myValues$table <<- NULL
+                   measureValues$table <<- NULL
+                   measures <<- c()
                    i <<- 10 #Measures begin at column 10
                    columnNamesMeasures <<- c("Measures")
-                   settingsData <- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
+                   settingsData <<- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
                    print(settingsData)
                    parameterList <<- settingsData$Parameter
                    sampleMins <<- settingsData$Min
@@ -493,11 +499,8 @@ server <- function(input, output, session) {
                    colnames(measureValues$table) <- columnNamesMeasures
                    print(measures)
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
-                   updateSelectInput(session, inputId = "measureSelect", choices = measures)
                    shinyjs::enable("partitionDataset")
   }})
-  
-  
   
 }
 
