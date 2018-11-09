@@ -45,11 +45,12 @@ fileName <<- FALSE
 columnNamesScale <<- c("Measure Scales")
 AtestResultsLocation <<- paste0(robustFilePathFull,"/ATest_Results.csv")
 parameterList <<-c()
-clearMeasureCount <<- 2
+#clearMeasureCount <<- 2
 #previousChoice <<- NULL
 k <<- 0 
 graphs <<- c()
 disableCounter <<- 0
+replicas <<- 30
 
 
 ui <- fluidPage(
@@ -111,18 +112,24 @@ ui <- fluidPage(
         wellPanel(id = "fileNamesForFunc",
                   textInput(inputId = "ATestFileName", label = "Type a Desired Name for A-Test Results (NO EXTENSION)", value = "ATest_Results", width = '100%', placeholder = ".csv"),
                   textInput(inputId = "eFASTResultsFileName", label = "Type a Desired Name for eFAST Results (NO EXTENSION)", value = "EFAST_Results", width = '100%', placeholder = ".csv"),
-                  textInput(inputId = "corCoeffsFileName", label = "Type a Desired Name for Coefficients Results (NO EXTENSION)", value = "LHC_corCoeffs", width = '100%', placeholder = ".csv")),
+                  textInput(inputId = "corCoeffsFileName", label = "Type a Desired Name for Coefficients Results (With .csv extension)", value = "LHC_corCoeffs.csv", width = '100%', placeholder = ".csv")),
       
         wellPanel(id = "Extras",
                   h4("Extra Variables:"),
                   numericInput(inputId = "aTestSig", label = "A-Test Signal Level:", value = 0.23, step = 0.01, min = 0),
                   numericInput(inputId = "ttest_conf", label = "T-Test Confidence Interval:", value = 0.95, step = 0.01, max = 1.00, min = 0)),
         
-        wellPanel(id = "filesWell",
+        wellPanel(id = "eFASTNotice",
+                  h5("If eFAST Results are already in a split csv file format then you are required to input the zip file containing them here. If files not sorted and you have just generated an all results and parameters file, then input this below")),
+       
+         wellPanel(id = "filesWell",
            h4("File Declarations:"),
 
             fileInput(inputId = "AllResults",
-                      label = "All Simulation Results File")
+                      label = "All Simulation Results File"),
+           
+            fileInput(inputId = "eFASTAllResults",
+                      label = "eFAST Results Input")
            
          ),
          
@@ -209,6 +216,11 @@ server <- function(input, output, session) {
   shinyjs::hide("zipGraphs")
   shinyjs::hideElement("lastWell")
   shinyjs::hide("AllResults")
+  shinyjs::hide("eFASTAllResults")
+  shinyjs::hideElement("eFASTNotice")
+  shinyjs::disable("showGraphs") 
+  shinyjs::disable("GraphButton")
+  shinyjs::disable("LHSGenerate")
   
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
@@ -220,13 +232,85 @@ server <- function(input, output, session) {
     
   })
   
+  observeEvent(input$eFASTAllResults,
+               {
+                 dir.create(file.path(eFASTFilePath, "correctCSVStructure"))
+                 
+                 if (input$eFASTAllResults$type == "application/zip")
+                 {
+                   unzip(input$eFASTAllResults$datapath, exdir = paste0(eFASTFilePath, "/correctCSVStructure"))
+                 }
+                 
+                 else if (input$eFASTAllResults$type == "text/csv")
+                 {
+                   #eFASTResults <- read.csv(input$eFASTAllResults$datapath)
+                   copyeFASTResults <- NULL
+                   #print(eFASTResults[0, ])
+                   startRow <- 1
+                   showModal(modalDialog(
+                     title = "Making csv file",
+                     "Creating csv files in the correct structure"))
+                   #For the eFASTFilePath summary
+                   lhc_generateLHCSummary(eFASTFilePath, parameterList, measures, input$eFASTAllResults$name, "eFASTSummary.csv") 
+                   #Remove these two columns as are not required for the analysis
+                   eFASTResults <- read.csv(paste0(eFASTFilePath, "/eFASTSummary.csv"))
+                   eFASTResults$Parameter.of.Interest <- NULL
+                   eFASTResults$curve <- NULL
+                   for (i in 1:length(parameterList))
+                   {
+                     for (j in 1:settingsData$number_of_curves[1])
+                     {
+                       for (k in startRow:(startRow + settingsData$number_of_samples[1]-1))
+                       {
+                         print(startRow)
+                         copyeFASTResults <- rbind(copyeFASTResults, eFASTResults[k, ])
+                       }
+                       write.csv(copyeFASTResults, file = paste0(eFASTFilePath, "/correctCSVStructure/Curve", j, "_Parameter", i, "_Results.csv"), row.names = FALSE)
+                       startRow <- startRow + settingsData$number_of_samples[1]
+                       copyeFASTResults <- NULL
+                     }
+                   }
+                   # for (i in 1:length(parameterList))
+                   # {
+                   #   for (j in 1:settingsData$number_of_curves[1])
+                   #   {
+                   #     for (k in 1:replicas)
+                   #     {
+                   #       for (l in startRow:(startRow + settingsData$number_of_samples[1]-1))
+                   #       {
+                   #         print(startRow)
+                   #         copyeFASTResults <- rbind(copyeFASTResults, eFASTResults[l, ])
+                   #       }
+                   #      
+                   #     }
+                   #    
+                   #     write.csv(copyeFASTResults, file = paste0(eFASTFilePath, "/correctCSVStructure/Curve", j, "_Parameter", i, "_Results.csv"), row.names = FALSE)
+                   #     startRow <- startRow + settingsData$number_of_samples[1]
+                   #     copyeFASTResults <- NULL
+                   #   }
+                   # }
+                   showModal(modalDialog(
+                     title = "Complete",
+                     "csv files are now in the correct structure"))
+                 }
+                 
+                 else 
+                 {
+                   showModal(modalDialog(
+                     title = "Unacceptable File Declaration",
+                     "Ensure your file type is .csv or zip"))
+                 }
+                 
+                 
+               })
+  
   observeEvent(input$zipGraphs,
           {
             if (input$usersAnalysisType == "Latin-Hypercube")
             {
               zipName <<- "LHCGraphs"
               lists <<- c(parameterList, "polarPlot")
-              filePathRequried <<- LHCFilePathFull
+              filePathRequired <<- LHCFilePathFull
               for (i in 1:length(lists))
               {
                 for (j in 1:length(measures))
@@ -254,7 +338,7 @@ server <- function(input, output, session) {
               filePathRequired <<- eFASTFilePath
               for (i in 1:length(measures))
               {
-                graphs <<- c(graphs, paste0(eFASTFilePath, "/", measures[i], ".png") )
+                graphs <<- c(graphs, paste0(eFASTFilePath, "/correctCSVStructure/", measures[i], ".png"))
               }
               
             }
@@ -288,12 +372,15 @@ server <- function(input, output, session) {
                       resultsFileHeaders <- c(resultsFileHeaders, gsub( " ", "", toString(resultsFileCheck[1,checkerCounter])))
                     }
                   }
+                  print(parameterList)
                   settingsCombinedParamsAndMeasures <<- c(measures, parameterList)
-                  print(resultsFileHeaders)
-                  print(settingsCombinedParamsAndMeasures)
+                  #print(resultsFileHeaders)
+                  #print(settingsCombinedParamsAndMeasures)
                   #print(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures))
                   if (length(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures)) != length(settingsCombinedParamsAndMeasures))
                   {
+                    print("starts here")
+                    print(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures))
                     showModal(modalDialog(
                       title = "Error",
                       "Summary file and Results file's parameters and measures do not match"))
@@ -301,24 +388,23 @@ server <- function(input, output, session) {
                   }
                  }
                  
-                 else
-                 {
-                   if (input$AllResults$type == "application/zip")
-                   {
-                     shinyjs::showElement("lastWell")
-                   }
-                   else
-                   {
-                     showModal(modalDialog(
-                       title = "Wrong File Format",
-                       "This file must be a zip file of all eFAST sample outputs"))
-                     shinyjs::hideElement("lastWell")
-                   }
-                 }
+                 # else
+                 # {
+                 #   if (input$AllResults$type == "application/zip")
+                 #   {
+                 #     shinyjs::showElement("lastWell")
+                 #   }
+                 #   else
+                 #   {
+                 #     showModal(modalDialog(
+                 #       title = "Wrong File Format",
+                 #       "This file must be a zip file of all eFAST sample outputs"))
+                 #     shinyjs::hideElement("lastWell")
+                 #   }
+                 # }
                  
                })
   
- 
   
   observeEvent(input$filePaths,
                {
@@ -338,8 +424,10 @@ server <- function(input, output, session) {
                      }
                      else if(input$usersAnalysisType == "eFAST")
                      {
-                       shinyjs::show("AllResults")
+                       shinyjs::hide("AllResults")
+                       shinyjs::show("eFASTAllResults")
                        shinyjs::show("lastWell")
+  
                      }
                      else if (input$usersAnalysisType == "Latin-Hypercube")
                      {
@@ -361,6 +449,14 @@ server <- function(input, output, session) {
   
   observeEvent(input$addMeasureScale,
                {
+                 for (i in nrow(measureValues$table))
+                 {
+                   if (is.na(measureValues$table[i, ]))
+                   {
+                     measureValues$table <<- measureValues$table[-2, ]
+                   }
+                 }
+                 print(nrow(measureValues$table))
                  if (input$measureScale != ""){    
                    measureScale <<- c(measureScale, input$measureScale)
                    updateTextInput(session, inputId = "measureScale", value = "")
@@ -380,11 +476,11 @@ server <- function(input, output, session) {
                    }
                    else if (length(measureScale) < length(measures) && length(measureScale) != 1)
                    {
-                     measureValues$table[clearMeasureCount,] <- c("Measure Scales:", measureScale, required) 
+                     measureValues$table[2, ] <- c("Measure Scales:", measureScale, required) 
                    }
                    else if(length(measureScale) == length(measures)) #once all measures have been given measure scales
                    {
-                     measureValues$table[clearMeasureCount,] <- c("Measure Scales:", measureScale) #Change the second row, or if the user has cleared measure then change respective to this
+                     measureValues$table[2, ] <- c("Measure Scales:", measureScale) #Change the second row, or if the user has cleared measure then change respective to this
                    }
                    else
                    {
@@ -397,6 +493,7 @@ server <- function(input, output, session) {
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE, na = "CLEARED")
                  }
                  shinyjs::enable("clearMeasureScales")
+                 print(measureScale)
                }
                )
   
@@ -409,9 +506,13 @@ server <- function(input, output, session) {
                  measureScaleValues$table
                  columnNamesScale <<- c("Measure Scales")
                  measureScaleCounter <<- 1
-                 measureValues$table[clearMeasureCount,] <- NA
+                 measureValues$table[2,] <- NA
                  output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE, na = "CLEARED")
-                 clearMeasureCount <<- clearMeasureCount + 1
+                 # for (j in 1:length(measures))
+                 # {
+                 #   measureScale <<- c(measureScale, "N/A")
+                 # }
+                 print(measureScale)
                  })
   
   observeEvent(input$settingsFile,
@@ -424,7 +525,7 @@ server <- function(input, output, session) {
                    measures <<- c()
                    i <<- 10 #Measures begin at column 10
                    columnNamesMeasures <<- c("Measures")
-                   settingsData <- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
+                   settingsData <<- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
                    print(settingsData)
                    parameterList <<- settingsData$Parameter
                    minvals <<- settingsData$Min
@@ -441,10 +542,7 @@ server <- function(input, output, session) {
                      i <- i+1 
                      columnNamesMeasures <<- c(columnNamesMeasures, paste0("Measure ", i-10))
                    }
-                   for (j in 1:length(measures))
-                   {
-                     measureScale <<- c(measureScale, "N/A")
-                   }
+
                    print(measureScale)
                    myValues$table <- rbind(isolate(myValues$table), cbind(parameterList,minvals,maxvals,incvals,baseline))
                    measureValues$table <- matrix(c("Measures:", measures), nrow = 1, byrow = TRUE)
@@ -460,34 +558,15 @@ server <- function(input, output, session) {
 
   observeEvent(input$LHSSummary,
                {
-                # if (input$usersAnalysisType == "Latin-Hypercube")
-                #   {
-                #     showModal(modalDialog(
-                #     title = "Creating Summary",
-                #     "Summary files are being created..."))
-                #     #print(input$AllResults)
-                #     checkIfSummaryNeeded <- read.csv(input$AllResults$datapath, stringsAsFactors = FALSE, row.names = NULL)
-                #     if (checkIfSummaryNeeded[1,1] == checkIfSummaryNeeded[2,1])
-                #     {
-                #       print(input$AllResults$name)
-                #       print(LHCFilePathFull)
-                #       print(lhcSummary)
-                #       print(parameterList)
-                #       print(measures)
-                #       summary <- lhc_generateLHCSummary(LHCFilePathFull, parameterList, measures, input$AllResults$name, lhcSummary) 
-                #       showModal(modalDialog(
-                #         title = "Complete",
-                #         "Summary files have been created"))
-                #     }
-                #     
-                #     else
-                #     {
-                #       showModal(modalDialog(
-                #         title = "No Summary Needed",
-                #         "A Summary file is not required as data already summarised"))
-                #          lhcSummary <<- input$AllResults$name
-                #     }
-                #   }
+                 if (length(measures) != length(measureScale))
+                 {
+                   measureScale <<- c()
+                   for (j in 1:length(measures))
+                   {
+                     measureScale <<- c(measureScale, "N/A")
+                   }
+                 }
+                 
                  if (input$usersAnalysisType == "Latin-Hypercube")
                  {
                    showModal(modalDialog(
@@ -503,6 +582,7 @@ server <- function(input, output, session) {
                      showModal(modalDialog(
                        title = "Complete",
                        "Summary files have been created"))
+                     shinyjs::enable("LHSGenerate")
                   
                  }
                     
@@ -514,24 +594,34 @@ server <- function(input, output, session) {
                       title = "Creating Results",
                       "ATest result files are being created..."
                     ))
+                    print(paste0("params:    ", parameterList))
+                    print(paste0("baselines:   ", baseline))
+                    print(paste0("measures:   ", measures))
+                    print(paste0("minvals:   ", minvals))
+                    print(paste0("maxvals:    ", maxvals))
+                    print(paste0("incvals:     ", incvals))
+                    #oat_csv_result_file_analysis(filepath,  "/home/fgch500/robospartan/omegaAlgorithm/Robustness2/omegaAlgorithmRobustnesscombinedParamsAndResults.csv", parameterList, baseline, measures, paste0(robustFilePathFull, "/", input$ATestFileName, ".csv"), minvals, maxvals, incvals, PARAMVALS=NULL)
                     oat_csv_result_file_analysis(filepath, input$AllResults$datapath , parameterList, baseline, measures, paste0(robustFilePathFull, "/", input$ATestFileName, ".csv"), minvals, maxvals, incvals, PARAMVALS=NULL)
                     showModal(modalDialog(
                       title = "Complete",
                       "ATest result files have been created"
                     ))
+                    shinyjs::enable("GraphButton")
                  }
                else if (input$usersAnalysisType == "eFAST"){
                    showModal(modalDialog(
                      title = "Creating Results",
                      "Overall medians result file are being created..."
                    ))
-                  unzip(input$AllResults$datapath, exdir = eFASTFilePath)
-                  # efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures)
-                  efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures)
+  
+                  
+                  efast_get_overall_medians(paste0(eFASTFilePath, "/correctCSVStructure"), num_curves, parameterList, num_samples, measures)
+                  #efast_get_overall_medians(eFASTFilePath, num_curves, parameterList, num_samples, measures)
                    showModal(modalDialog(
                      title = "Complete",
                      "Overall medians result file have been created"
                    ))  
+                   shinyjs::enable("GraphButton")
                }
           }
                   )
@@ -542,11 +632,11 @@ server <- function(input, output, session) {
                  print(measures)
                  #lhcSummary <<- "LHC_Summary.csv"
                  print(lhcSummary)
-                 lhc_generatePRCoEffs(LHCFilePathFull, parameterList, measures, lhcSummary, input$corCoeffsFileName)  
-                #lhc_generatePRCoEffs("/home/fgch500/robospartan/LHCFiles", parameterList, measures, "LHC_Summary.csv", "LHC_corCoeffs")  
+                 lhc_generatePRCoEffs(LHCFilePathFull, parameterList, measures, lhcSummary, input$corCoeffsFileName)
                  showModal(modalDialog(
                    title = "Complete",
                    "Coefficients files have been created"))
+                 shinyjs::enable("GraphButton")
                })
   
   observeEvent(input$ifMeasureScale,
@@ -591,6 +681,8 @@ server <- function(input, output, session) {
                  shinyjs::hide("ttest_conf")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
+                 shinyjs::hideElement("eFASTNotice")
+                 #shinyjs::enable("GraphButton")
                  output$textChange <- renderText("")
                  output$selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = c(parameterList))
@@ -608,6 +700,8 @@ server <- function(input, output, session) {
                  shinyjs::show("ttest_conf")
                  shinyjs::hideElement("measuresWell")
                  shinyjs::showElement("filesWell")
+                 shinyjs::showElement("eFASTNotice")
+                 shinyjs::disable("GraphButton")
                  output$textChange <- renderText("")
                  output$selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = measures)
@@ -625,6 +719,8 @@ server <- function(input, output, session) {
                  shinyjs::hideElement("Extras")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
+                # shinyjs::enable("GraphButton")
+                 shinyjs::hideElement("eFASTNotice")
                  output$textChange <- renderText("Generate Coefficients")
                  output$ selectUI <- renderUI({
                    selectInput(inputId = "usersAnalysisInput", label = "Graph Analysis Selection", choices = c(parameterList, "polarPlot"))
@@ -641,14 +737,34 @@ server <- function(input, output, session) {
                    showModal(modalDialog(
                      title = "Generating Graphs",
                      "Graphs are being generated..."))
+                   simDataset <<-read.csv(paste0(LHCFilePathFull,"/",lhcSummary), header = TRUE)
+                   for (i in 1:(length(simDataset[1, ])))
+                   {
+                     if(min(simDataset[i]) == max(simDataset[i]))
+                     {
+                       lister <- c(lister, colnames(simDataset[i]))
+                       dataRemoved <<- TRUE
+                     }
+                   }
+                   listerString <- toString(lister)
                    lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measureScale, input$corCoeffsFileName, lhcSummary, OUTPUT_TYPE = "PNG")
-                   #POLAR PLOT CURRENTLY GIVING AN ERROR 
                    lhc_polarplot(LHCFilePathFull, parameterList, measures, input$corCoeffsFileName) 
-                   #lhc_graphMeasuresForParameterChange(LHCFilePathFull, parameterList, measures, measure_scale, "LHC_corCoeffs", lhcSummary, OUTPUT_TYPE = "PNG")
-                   #lhc_polarplot(LHCFilePathFull, parameterList, measures, "LHC_corCoeffs") 
-                   showModal(modalDialog(
-                     title = "Complete",
-                     "Graphs have been generated"))
+                   
+                   if (dataRemoved == TRUE)
+                   {
+                     showModal(modalDialog(
+                       title = "Complete",
+                       paste0("Graphs have been generated. The measure(s) ", listerString,", have not been analysed. This is due to their values all being identical.")))
+                     measures <<- measures[!measures %in% lister] #Remove the non partitioned measures as these will not be included in the graph options
+                     print(measures)
+                   }
+                   else 
+                   {
+                     showModal(modalDialog(
+                       title = "Complete",
+                       "Graphs have been generated"))
+                   }
+
                  }
                  else if (input$usersAnalysisType == "Robustness")
                  {
@@ -674,12 +790,16 @@ server <- function(input, output, session) {
                   print(input$ttest_conf)
                   print(measures)
                   print(parameterList)
-                  efast_run_Analysis(eFASTFilePath, measures, parameterList, num_curves, num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
+                  
+                  #efast_run_Analysis(eFASTFilePath, measures, parameterList, num_curves, num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
+                  efast_run_Analysis(paste0(eFASTFilePath, "/correctCSVStructure"), measures, parameterList, num_curves, num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
                   showModal(modalDialog(
                     title = "Complete",
                     "Graphs have been generated"))
                 }
+                shinyjs::enable("showGraphs") 
                })
+  
   output$firstChoice <- renderText({
                           switch(input$usersAnalysisType, "Latin-Hypercube" = "Generate Summary",
                                                           "Robustness" = "Generate ATest Results",
@@ -710,8 +830,8 @@ server <- function(input, output, session) {
                  else
                  {
                    output$Graph <- switch(input$usersAnalysisType, "Latin-Hypercube" = renderImage(list(src = paste0(LHCFilePathFull, "/", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
-                                          "Robustness" = renderImage(list(src = paste0(robustFilePathFull, "/", input$usersAnalysisInput, input$changingMeasures, "_BP.png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
-                                          "eFAST" = renderImage(list(src = paste0(eFASTFilePath, "/", input$changingMeasures, ".png"), width = '100%', alt = paste("Image not found")), deleteFile = FALSE))
+                                          "Robustness" = renderImage(list(src = paste0(robustFilePathFull, "/BP_", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
+                                          "eFAST" = renderImage(list(src = paste0(eFASTFilePath, "/correctCSVStructure/", input$changingMeasures, ".png"), width = '100%', alt = paste("Image not found")), deleteFile = FALSE))
                    
                  }
                  
