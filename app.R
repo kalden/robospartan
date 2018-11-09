@@ -308,6 +308,7 @@ server <- function(input, output, session) {
                  measureValues$table
                  columnNames <<- c("Measures")
                  measureCounter <<- 1
+                 
                })
   
   
@@ -416,7 +417,9 @@ server <- function(input, output, session) {
      {
       if (!is.null(input$argosFiles$datapath) && sampleCreated){
          #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
-         dir.create(file.path(input$argosDirectory, "/experiments"))
+         dir.create(file.path(input$argosDirectory, "experiments"))
+         dir.create(file.path(input$argosDirectory, "logs"))
+         dir.create(file.path(input$argosDirectory, "Results"))
          directory <<- paste0(input$argosDirectory, "/experiments")
          #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
          zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
@@ -615,9 +618,6 @@ server <- function(input, output, session) {
   observeEvent(
     input$cluster, 
     {
-      dir.create(file.path(input$argosDirectory, "logs"))
-      dir.create(file.path(input$argosDirectory, "Results"))
-      
       sink(paste0(input$argosDirectory, "/", input$analysisType, "_cluster_argos.sh"))
       cat("#!/bin/bash","\n")
       cat("#$-cwd","\n")
@@ -921,6 +921,7 @@ server <- function(input, output, session) {
   observeEvent({
     input$clearParameter},
     {
+      Decimal_or_Rounded <<- c()
       shinyjs::hideElement("main")
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
       shinyjs::disable("createARGoSFiles") 
