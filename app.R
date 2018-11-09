@@ -918,8 +918,8 @@ server <- function(input, output, session) {
   observeEvent(input$deleteDB, delete_database_structure(dblink)) #Allows the user to delete database structure
   
   #### Action when Clear Parameter is pressed
-  observeEvent({
-    input$clearParameter},
+  observeEvent(
+    input$clearParameter,
     {
       Decimal_or_Rounded <<- c()
       shinyjs::hideElement("main")
