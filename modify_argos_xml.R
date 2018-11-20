@@ -1,7 +1,5 @@
 #xmlfile2<-xmlParse("/home/kja505/Documents/roboSpartan/sample_argos_file.argos")
 #gCol=getNodeSet(xmlfile2, "//argos-configuration//controllers//params")
-
-
 # In Edgar's scripts , parameters are being modified in uploadRuns_LHA.sh
 # expName - seems to only be involved in setting experiment name (or seed maybe)
 # swarmSize - as entity in distribute tag, but also in mid of layout (more difficult)
@@ -10,6 +8,8 @@
 # memFac : Can modify OK
 
 library(xml2)
+library(shinycssloaders)
+
 
 #' Recursively search the XML file for the tag attributes that are being changed
 #' @param child_nodes Current set of child nodes being examined
@@ -41,34 +41,52 @@ search_child_nodes_and_set_attribute<-function(child_nodes, attribute_name,attri
 
 #' For a generated sample, make files to run in ARGoS Simulator
 #' @param argos_file_path Full path to an ARGoS file
-#' @param output_folder Where the generated files should go
+#' @param output_folder Where the generated files should go, this is just a temporary folder so that the files can be zipped.
 #' @param parameters ARGoS parameters of interest
 #' @param generated_sample Sample of parameter values to insert into XML files
-make_argos_file_from_sample<-function(argos_file_path, output_folder, parameters, generated_sample)
+make_argos_file_from_sample<-function(argos_file_path, output_folder, parameters, generated_sample, zipLocation, replicaRuns)
 {
+  file.remove(paste0(zipLocation,".zip")) #Delete previous zip folder if there is one
+  # for(s in 1:nrow(generated_sample))
+  # {
+  #   argos_file <- read_xml(argos_file_path)
+  #   for (replica in 1:replicaRuns)
+  #   {
+  #     child_nodes<<-xml_children(argos_file)
+  #     search_child_nodes_and_set_attribute(child_nodes,"random_seed", c(replica))
+  #     
+  #     for(param in 1:length(parameters))
+  #     {
+  #       search_child_nodes_and_set_attribute(child_nodes,parameters[param], generated_sample[s,param])
+  #     }
+  #     
+  #     # Write out the XML file
+  #     write_xml(argos_file,file.path(output_folder,paste("argos_experiment_seed",replica,"_set",s,".argos",sep="")),options="format")
+  #   }
+  #   
   for(s in 1:nrow(generated_sample))
   {
     argos_file <- read_xml(argos_file_path)
-    
+    child_nodes<<-xml_children(argos_file)
+      
     for(param in 1:length(parameters))
     {
-      child_nodes<-xml_children(argos_file)
-      search_child_nodes_and_set_attribute(child_nodes,parameters[param], values[s,param])
+      search_child_nodes_and_set_attribute(child_nodes,parameters[param], generated_sample[s,param])
     }
-    
+
     # Write out the XML file
     write_xml(argos_file,file.path(output_folder,paste("argos_experiment_set_",s,".argos",sep="")),options="format")
-  }  
+  }
+  
+  zip(zipfile = zipLocation, dir(file.path(output_folder), full.names = TRUE))
+  showModal(modalDialog(
+    title = "Zip File Created",
+    "A Zip file of ARGoS files has been created at:       ", zipLocation))
+  
+  # for(s in 1:nrow(generated_sample)) #Remove all XML files once they've been zipped
+  # {
+  #   file.remove(file.path(output_folder, paste0("argos_experiment_set_",s,".argos")))
+  # }
+  # 
+  
 }
-
-  
-  
-  
-##### Test Part:  
-parameters<-c("quantity","home_source_distance","epsilon","memory_factor")
-values<-rbind(cbind(12,1.8,8,24),cbind(30,31,32,33))
-make_argos_file_from_sample("~/Documents/robospartan/psiswarm_dps.argos","~/Documents/robospartan",parameters,values)
-              
-#for(i in 1:nrow(r))
-
-  

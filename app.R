@@ -6,27 +6,35 @@
 #
 #    http://shiny.rstudio.com/
 #
-
 library(shiny)
 library(shinyjs)
 library(DT)
 library(spartan)
 library(DBI)
 library(RMySQL)
-source("/home/kja505/Documents/spartanDB/R/generate_parameter_sample_in_db.R")
-source("/home/kja505/Documents/spartanDB/R/database_utilities.R")
+library(readr) #Required for wrtie_csv on MacOS
+#library(spartanDB)
+
+source("modify_argos_xml.R")
 parameters<-c()
 mins<-c()
 maxs<-c()
-
-
+baselines<-c()
+increments<-c()
+curves<-c()
+directory <- ""
+measures <- c()
+columnNames <<- c("Measures")
+wholeNumbers <- c()
+Decimal_or_Rounded <- c()
+resultReplicas <- c()
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
   useShinyjs(),
   
    # Application title
-   h3("Generate Parameter Sets using Latin-Hypercube Sampling"),
+   h3("Generate Parameter Sets Using Different Sampling Techniques"),
    
    # LHC: Parameters
    # Number of Samples
@@ -38,41 +46,56 @@ ui <- fluidPage(
       sidebarPanel(
         
        
-        
         wellPanel(
           
-          h4("Declare Parameters:"),
+          h4("Analysis Technique:"),
+          selectInput(inputId = "analysisType",
+                      label = NULL,
+                      choices = c("Latin-Hypercube","Robustness", "eFAST")),
           
+          h4("Declare Parameters:"),
+          h6(tags$em("Note: eFAST will automatically have a dummy parameter declared")),
+          h6(tags$em("Note: Do Not Use Any Spaces When Declaring Parameters or Measures")),
           textInput(inputId = "parameter",
                     label = "Parameter:",
-                    value = ""),
+                    value = "a"),
           
           numericInput(inputId = "min",
                     label = "Minimum:",
-                    value = ""),
+                    value = 0, min = 0),
           
           numericInput(inputId = "max",
                     label = "Maximum:",
-                    value = ""),
+                    value = 0, min = 0),
+          
+          numericInput(inputId = "robustnessIncrement",
+                       label = "Increment",
+                       value = 0, min = 0),
+          
+          numericInput(inputId = "baseline",
+                       label = "Calibrated Baseline",
+                       value = 0, min = 0),
+          
+          checkboxInput(inputId = "wholeNumber", label = "Values Rounded to a Whole Number"),
+          
           
           #,textInput('txt','','Text')
           actionButton(inputId = "addParameter",
                         label = 'Add Parameter'),
           actionButton(inputId = "clearParameter",
                        label = 'Clear All')
-          #,textOutput('list'),
           
-          #actionButton(inputId = "addParameter2",
-          #             label = "Add Parameter2")
         ),
         
-        #wellPanel(
-        #  
-        #  htmlOutput("table_header2"),
-        #  div(tableOutput("parameter_table2"),style="font-size:90%")
-        #),
-         
-        #htmlOutput("parameter_list"),
+        wellPanel(id = "measuresWell",
+                  h4("Measures:"),
+                  textInput(inputId = "measures",
+                            label = "Choose Your Measures:",
+                            value = "NULL"),
+                  actionButton(inputId = "addMeasure", label = "Add to Measures"),
+                  actionButton(inputId = "clearMeasures", label = "Clear All Measures")
+        ),
+        
         
        wellPanel(
          
@@ -80,22 +103,83 @@ ui <- fluidPage(
          
          numericInput(inputId = "numSamples",
                       label = "Number of Samples",
-                      value = 500),
+                      value = 65, min = 0),
+         
+         numericInput(inputId = "numCurves",
+                      label = "Number of Curves",
+                      value = 1, min = 0),
          
          selectInput(inputId = "algorithm",
                      label = "Sampling Algorithm",
-                     choices = c("normal","optimal"))
-      ),
-      
-       actionButton(inputId = "createSample",
+                     choices = c("normal","optimal")),
+         
+         numericInput(inputId = "numExecutions",
+                      label = "Number of Replica Executions",
+                      value = 400, min = 0),
+
+         actionButton(inputId = "createSample",
                    label = 'Create Sample'),
-        br(),
-      
-        actionButton(inputId = "createARGoSFiles",
-                   label = 'Create ARGoS Files'),
-        br(),
+         hr(),
+         
+         fileInput(inputId = "argosFiles",
+                   label = "Argos File To Modify:"),
+         
+         h6(tags$em("Please ensure to not end your file path with a '/' character, else it will count as a false file path")),  
+         
+         textInput(inputId = "argosDirectory",
+                   label = "Type the full file directory where you wish the ARGoS file to save:",
+                   value = "/home/fgch500/robospartan/argosFiles"),
+         
+         tags$style("#argosDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+         
+         textInput(inputId = "argosDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         
+         tags$style("#argosDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         
+         textInput(inputId = "argosDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         
+         hr(), hr(), hr(),
+         
+         textInput(inputId = "zipDirectory",
+                   label = "Type the full file directory where you wish the ZIP file to save:",
+                   value = "/home/fgch500/robospartan/argosFilesZip"),
+         
+         tags$style("#zipDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+         
+         textInput(inputId = "zipDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         
+         tags$style("#zipDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         
+         textInput(inputId = "zipDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         
+         hr(), hr(), hr(),
+         
+         textInput(inputId = "zipName", label = "Enter the name you'd like the zip file saved as", value = "argosZIP", width = '100%'),
+         
+         actionButton(inputId = "createARGoSFiles",
+                   label = 'Modify ARGoS Files'),
+
+         actionButton(inputId = "setVariables",
+                      label = "Set Variables for Simulation Runs"),
+         
+         actionButton(inputId = "cluster",
+                      label = "Add to Cluster")
+       ),
       
       wellPanel(
+        
+        h4("Database:"),
+      
+        fileInput(inputId = "DBSettings",
+                  label = "Database Settings File:"),
+        
+        actionButton(inputId = "createDB",
+                     label = "Make Database"),
+        
+        actionButton(inputId = "deleteDB",
+                     label = "Delete Database"),
+        
+        br(), br(),
         
         textInput(inputId = "description",
                   label = "Experiment Description:",
@@ -103,23 +187,29 @@ ui <- fluidPage(
         
         actionButton(inputId = "addToDB",
                   label = 'Add Experiment to Database')
+        
+        
       ),
       
       width = 5),
       
       # Show a plot of the generated distribution
-      mainPanel(
+      mainPanel(id = "main",
         
         # Output the parameters as they are entered:
         htmlOutput("table_header"),
         div(tableOutput("parameter_table"),style="font-size:90%"),
+        div(tableOutput("measures_table"),style = "font-size:90%"),
         
         hr(),
         
         # Now output the sample once generated, with a download button
         htmlOutput("sample_header"),
         div(DT::dataTableOutput(outputId = "sample"),style="font-size:90%"),
+        br(),
+        downloadButton(outputId = "settingFile", label = "Download settings"),
         downloadButton(outputId = "lhc_sample", label = "Download data"),
+       
         
         width=7
       )
@@ -127,56 +217,661 @@ ui <- fluidPage(
    
 )
 
-# Define server logic required to draw a histogram
+# Define server logic 
 server <- function(input, output, session) {
   
+  measureCounter <- 1
+  measureValues <- reactiveValues()
+  myValues <- reactiveValues()
+  myValues$sampleGenerated<-FALSE
+  shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
+  shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
+  shinyjs::hide("addToDB")
+  shinyjs::hide("createDB")
+  shinyjs::hide("cluster")
+  shinyjs::hide("argosDirectory")
+  shinyjs::hide("zipDirectory")
+  shinyjs::hide("argosDirNotComplete")
+  shinyjs::hide("argosDirComplete")
+  shinyjs::hide("zipDirNotComplete")
+  shinyjs::hide("zipDirComplete")
+  shinyjs::hide("zipName")
+  shinyjs::hide("setVariables")
+  shinyjs::disable("clearMeasures")
+  #shinyjs::hideElement("main")
+  shinyjs::hide("settingFile")
+  shinyjs::hide("wholeNumber")
+  sampleCreated <<- FALSE #Flag to determine whether a sample has been created
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
     
     if(myValues$sampleGenerated==TRUE)
       shinyjs::show("lhc_sample")
+      
   })
-
-  myValues <- reactiveValues()
-  myValues$sampleGenerated<-FALSE
+  
+  observeEvent(
+    input$analysisType,
+    {
+        #Robustness analysis technique - parameter requires param, min, max and increment. No settings required.
+        if(input$analysisType == "Robustness"){
+          shinyjs::show("robustnessIncrement")
+          shinyjs::hide("numSamples")
+          shinyjs::hide("algorithm")
+          shinyjs::hide("numCurves") 
+          shinyjs::show("baseline")
+          shinyjs::hide("wholeNumber")
+        }  
+        #Latin-Hypercube analysis technique - parameter requires param, min, max. Settings are sample number and algorithm type.
+        else if(input$analysisType == "Latin-Hypercube"){
+          shinyjs::hide("robustnessIncrement")
+          shinyjs::show("numSamples")
+          shinyjs::show("algorithm")
+          shinyjs::hide("numCurves") 
+          shinyjs::hide("baseline")
+          shinyjs::show("wholeNumber")
+        }  
+        #eFAST analysis technique - parameter requires requires param, min, max. Settings require additional 
+        else{
+          shinyjs::hide("robustnessIncrement")
+          shinyjs::show("numSamples")
+          shinyjs::hide("algorithm")
+          shinyjs::show("numCurves") 
+          shinyjs::hide("baseline")
+          shinyjs::show("wholeNumber")
+        } 
+    })
+  
+  observeEvent(input$addMeasure,
+               {
+                 if (input$measures != ""){
+                   measures <<- c(measures, input$measures)
+                   print(measures)
+                   updateTextInput(session, inputId = "measures", value = "")
+                   measureValues$table <- rbind(c("Measures:", measures))
+                   columnNames <<- c(columnNames, paste0("Measure ", measureCounter))
+                   colnames(measureValues$table) <- columnNames
+                   output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
+                   shinyjs::enable("clearMeasures")
+                   measureCounter <<- measureCounter + 1
+                   print (measureCounter)
+                 }
+               })
+  
+  observeEvent(input$clearMeasures,
+               {
+                 measures <<- c()
+                 updateTextInput(session, inputId = "measures", value = "")
+                 shinyjs::disable("clearMeasures")
+                 output$measures_table <-  NULL
+                 measureValues$table
+                 columnNames <<- c("Measures")
+                 measureCounter <<- 1
+                 
+               })
+  
   
   # Download generated sample
   output$lhc_sample <- downloadHandler(
     filename = function() {
-      paste0("lhc_sample.csv")
+      paste0(input$analysisType,"Data.csv")
     },
     content = function(file) { 
-      write_csv(data.frame(myValues$sample), path = file) 
+      print(columnNames)
+      colnames(result) <- columnNames
+      write_csv(data.frame(result), path = file) 
       }
   )
   
-  #### Action when Create Sample is pressed
-  observeEvent(
-    input$createSample,
-    {
-      if(is.integer(input$numSamples))
+  #Create a settings .csv file
+  output$settingFile <- downloadHandler(
+    filename = function() {
+      "Settings.csv"
+    },
+    content = function(file) { 
+      analysis_type = input$analysisType
+      if (input$analysisType == "Robustness")
       {
-        myValues$sample<<-lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
-        myValues$sampleGenerated<<-TRUE
+        number_of_samples = "N/A"
+      }
+      else
+      {
+        number_of_samples = input$numSamples
+      }
+      
+      if (input$analysisType == "eFAST")
+      {
+        number_of_curves = input$numCurves
+      }
+      else
+      {
+        number_of_curves = "N/A"
+      }
+      #write_csv(cbind(input$analysisType, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+    }
+  )
+  
+  observeEvent(input$argosFiles,
+      {
+        shinyjs::show("argosDirectory")
+        shinyjs::show("zipDirectory")
+      })
+  
+  observeEvent(input$argosDirectory,
+               {
+                  if(!is.null(input$argosFiles$datapath)){
+                   if(file.exists(input$argosDirectory) && substr(input$argosDirectory, nchar(input$argosDirectory), nchar(input$argosDirectory)) != "/")
+                   {
+                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::hide("argosDirNotComplete")
+                     shinyjs::show("argosDirComplete")
+                     
+                   }
+                   else
+                   {
+                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::show("argosDirNotComplete")
+                     shinyjs::hide("argosDirComplete")
+                   }
+                 }
+               })
+  
+  observeEvent(input$zipDirectory,
+               {
+                 if(!is.null(input$argosFiles$datapath)){
+                   if(file.exists(input$zipDirectory) && substr(input$zipDirectory, nchar(input$zipDirectory), nchar(input$zipDirectory)) != "/")
+                   {
+                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::hide("zipDirNotComplete")
+                     shinyjs::show("zipDirComplete")
+                     shinyjs::show("zipName")
+                     
+                   }
+                   else
+                   {
+                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::show("zipDirNotComplete")
+                     shinyjs::hide("zipDirComplete")
+                     shinyjs::hide("zipName")
+                   }
+                 }
+               })
+  #Make sure the zip file has a desired names
+  observeEvent(input$zipName,
+               {
+                 if (input$zipName == "")
+                 {
+                   shinyjs::disable("createARGoSFiles")
+                 }
+                 else
+                 {
+                   shinyjs::enable("createARGoSFiles")
+                 }
+               }
+               )
+                 
+  #Modify ARGoS files
+  observeEvent(input$createARGoSFiles,  
+     {
+      if (!is.null(input$argosFiles$datapath) && sampleCreated){
+         #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
+         dir.create(file.path(input$argosDirectory, "experiments"))
+         dir.create(file.path(input$argosDirectory, "logs"))
+         dir.create(file.path(input$argosDirectory, "Results"))
+         directory <<- paste0(input$argosDirectory, "/experiments")
+         #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
+         zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
+         zipName <- input$zipName
+         print(result)
+         filesToModify <- input$argosFiles$datapath
+         showModal(modalDialog(
+           title = "Creating ARGoS Files",
+           "ARGoS files are being created..."))
+         print(input$numExecutions)
+         make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation, "/", zipName), input$numExecutions)
+         shinyjs::show("cluster")
+         shinyjs::show("setVariables")
+      }
+       
+      else {
+          showModal(modalDialog(
+            title = "No Sample found",
+            "You must first create a sample with your chosen parameters and values"))
+      }
+     } 
+  )
+      
+  #### Action when Create Sample is pressed
+  observeEvent(input$createSample,
+    {
+      complete <<- FALSE
+      if (length(measures) > 0)
+      {
+        result <<- NULL
+        sampleCreated <<- TRUE
+        #measures <<- c("Velocity", "Displacement")
+        shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
+        shinyjs::show("settingFile")
         
-        #print(head(myValues$sample))
-        output$sample_header <- renderUI({ h4("Generated Sample:") })
-        output$sample <- DT::renderDataTable(
-          DT::datatable(data = myValues$sample, 
-                        options = list(pageLength = 10, searching=FALSE), 
-                        rownames = FALSE))
+        if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
+        {
+          myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
+          myValues$sampleGenerated<<-TRUE
+          columnNames <<- c(parameters)
+          result<<-myValues$sample #required when the user wishes to download the analysis
+          if (length(wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
+          {
+            for (i in wholeNumbers)
+            {
+              result [ ,i] <<- round(result[ ,i])
+            }
+          }
+          #for (lines in 1:input$numSamples)
+          #{
+            #for (replicas in 1:input$numExecutions)
+            #{
+              #resultReplicas <<- rbind(resultReplicas, result[lines, ])
+              
+            #}
+          #}
+         
+          output$sample_header <- renderUI({ h4("Generated Sample:") })
+          output$sample <- DT::renderDataTable(
+            DT::datatable(data = result, 
+                          options = list(pageLength = 10, searching=FALSE), 
+                          rownames = FALSE, colnames = columnNames))
+          
+          complete <- TRUE
+        }
+        
+        else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
+        {
+          if (length(parameters) > 1)
+          {
+            if (input$numSamples >= 65)
+            {
+              
+              #Adding the dummy parameter
+              parameters <- c(parameters, "Dummy")
+              mins <- c(mins, 0)
+              maxs <- c(maxs, 1)
+              print("here")
+              myValues$sample <<- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, parameters, mins, maxs, write_csv = FALSE, return_sample = TRUE)
+              myValues$sampleGenerated<<-TRUE
+              print("now here")
+              print("eFAST can work")
+              for(param in 1:length(parameters)) #iterate through each parameter chosen
+              {
+                for(c in 1:input$numCurves) #iterate for the number of curves chosen
+                {
+                  myValues$sample[ , wholeNumbers,param,c] <<- round(myValues$sample[,wholeNumbers, param, c ])
+
+                  result <<- rbind(result, cbind(myValues$sample[,  , param,c], parameters[param], c))
+                }
+              }
+              showModal(modalDialog(
+                title = "Generating data table",
+                "Data table is currently being generated"))
+              #for (lines in 1:nrow(result))
+              #{
+              #  for (replicas in 1:input$numExecutions)
+              #  {
+              #    resultReplicas <<- rbind(resultReplicas, result[lines,  ])
+              #  }
+              #}
+              columnNames <<- c(parameters, "Parameter of Interest", "Curve")
+              output$sample_header <- renderUI({ h4("Generated Sample:") })
+              output$sample <- DT::renderDataTable(
+                DT::datatable(data = result,
+                              options = list(pageLength = 10, searching=FALSE),
+                              rownames = FALSE, colnames = columnNames))
+              showModal(modalDialog(
+                title = "Data table generated",
+                "Data table has been generated"))
+              
+              complete <- TRUE
+            }
+            else
+            {
+              showModal(modalDialog(
+                title = "Incorrect number of samples",
+                "eFAST requires at least 65 samples"))
+              shinyjs::disable("createARGoSFiles") 
+            }
+          }
+          else
+          {
+            showModal(modalDialog(
+              title = "Incorrect number of parameters",
+              "eFAST requires at least 2 parameters"))
+            shinyjs::disable("createARGoSFiles") 
+          }
+        
+          
+        }
+        
+        else if(input$analysisType == "Robustness")
+        {
+          myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, baselines, mins, maxs, increments, write_csv = FALSE, return_sample = TRUE)
+          myValues$sampleGenerated<<-TRUE
+          for(param in 1:length(myValues$sample))
+          {
+            result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
+          }
+          print(nrow(result))
+          #for (lines in 1:nrow(result))
+          #{
+          #  for (replicas in 1:input$numExecutions)
+          #  {
+          #    resultReplicas <<- rbind(resultReplicas, result[lines, ])
+          #  }
+          #}
+          columnNames <<- c(parameters, "Parameter of Interest")
+          output$sample_header <- renderUI({ h4("Generated Sample:") })
+          output$sample <- DT::renderDataTable(
+            DT::datatable(data = result,
+                          options = list(pageLength = 10, searching=FALSE),
+                          rownames = FALSE, colnames = columnNames))
+          complete <- TRUE
+          
+        }  
+        
+        else #this case gets called when latin-hypercube or eFAST have incorrect number of samples
+        {
+          showModal(modalDialog(
+            title = "Incorrect number of samples",
+            "Number of samples should be numeric"))
+          shinyjs::disable("createARGoSFiles") 
+          
+        }
       }
       else
       {
         showModal(modalDialog(
-          title = "Incorrect number of samples",
-          "Number of samples should be numeric"))
+          title = "No Measures",
+          "You must have at least one measure defined before creating the sample"))
       }
+    if (complete == TRUE)
+    {
+      shinyjs::disable("addParameter")
+      shinyjs::disable("clearParameter")
+      shinyjs::disable("analysisType")
+      shinyjs::hide("measuresWell")
+      shinyjs::disable("createSample")
+    }
+    }
+     
+  )
+
+  observeEvent(
+    input$DBSettings,
+    {
+      rmysql.settingsfile<-input$DBSettings$datapath #Use the user's selected datapath
+      rmysql.db<-"spartan_ppsim"
+      dblink<<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
+      shinyjs::show("addToDB")
+      shinyjs::show("createDB")
+    })
+  
+  #Write a bash script to send the simulation to the cluster
+  observeEvent(
+    input$cluster, 
+    {
+      sink(paste0(input$argosDirectory, "/", input$analysisType, "_cluster_argos.sh"))
+      cat("#!/bin/bash","\n")
+      cat("#$-cwd","\n")
+      cat(paste0("#$-t 1-", input$numSamples),"\n")
+      cat("#$-l h_vmem=8G","\n")
+      cat("#$-l h_rt=05:00:00","\n")
+      cat("#$ -o ./logs/","\n")
+      cat("#$ -e ./logs/","\n")
+      cat("","\n")
+      cat("# Parameter","\n")
+      cat("function analyseParameters() {","\n")
+      cat("	for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
+      cat("	do","\n")
+      cat("		# Directory","\n")
+      cat("		if [ -d Results/$expName/$i ]","\n")
+      cat("			then echo -e \"\nDirectory replica excecution $i exists\n\" >> Results/Logs/$FILE.txt","\n")
+      cat("			else mkdir Results/$expName/$i","\n")
+      cat("		fi","\n")
+      cat("		analyseIterations \"$1\"","\n")
+      cat("		echo -n \".\"","\n")
+      cat("	done","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("# Iteration","\n")
+      cat("function analyseIterations() {","\n")
+      cat("","\n")
+      cat("		filename=${expName}$1","\n")
+      cat("","\n")
+      cat("		modifyFiles \"$1\"","\n")
+      cat("","\n")
+      cat("		# Directory","\n")
+      cat("		if [ -d Results/$expName/$i/$1 ]","\n")
+      cat("			then echo -e \"Directory iteration $1 exists \n\" >> Results/Logs/$FILE.txt","\n")
+      cat("			else mkdir Results/$expName/$i/$1","\n")
+      cat("		fi","\n")
+      cat("","\n")
+      cat("		#------------Copy simulation----------#","\n")
+      cat("		cp -R experiments/${expName}${1}.argos Results/$expName/$i/$1","\n")
+      cat("		#------------Run simulation----------#","\n")
+      cat("		argos3 -c experiments/${expName}${1}.argos","\n")
+      cat("","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("function modifyFiles() {","\n")
+      cat("","\n")
+      cat("	# Simulation parameters","\n")
+      cat("	perl -i -pe 's|(experiment length=)\".*?\"|$1\"'\"$length\"'\"|g' experiments/$filename.argos # Change experiment length","\n")
+      cat("	perl -i -pe 's|(random_seed=)\".*?\"|$1\"'\"$i\"'\"|g' experiments/$filename.argos # Change seed","\n")
+      cat("	","\n")
+      cat("	#change file path for the data to get saved to ","\n")
+      cat("	sed -i 's|file_path=\"[^\"]*\"|file_path=\"./Results/argos_experiment_set_/'$i'/'$1'/\"|g' experiments/$filename.argos","\n")
+      cat("","\n")
+      cat("	","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("# Variables","\n")
+      cat("source ./Latin-Hypercube_variables.sh","\n")
+      cat("","\n")
+      cat("FILE=$expName","\n")
+      cat("","\n")
+      #cat("VAR=\"Output\n\"","\n")
+      cat("","\n")
+      cat("#Create a results folder to store all results if there is not already one","\n")
+      cat("if [ ! -d Results ] ","\n")
+      cat("	then mkdir Results","\n")
+      cat("fi","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("# Directory","\n")
+      cat("if [ -d Results/$expName ]","\n")
+      cat("	then echo -e \"\nDirectory type $expName exists\n\" >> Results/Logs/$FILE.txt","\n")
+      cat("	else mkdir Results/$expName ","\n")
+      cat("fi","\n")
+      cat("clear","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("mkdir ./logs")
+      cat("module load argos3/3.0.0","\n")
+      cat("analyseParameters \"$SGE_TASK_ID\"","\n")
+      cat("echo \"End\"","\n")
+      cat("","\n")
+      sink()
       
+      sink(paste0(input$argosDirectory, "/", "processDataAndCombineResults.sh"))
+      cat("#!/bin/bash","\n")
+      cat("","\n")
+      cat("#-----Import variables-----#","\n")
+      cat("source ./Latin-Hypercube_variables.sh","\n")
+      cat("","\n")
+      cat("function analyseParameters () {","\n")
+      cat("	#-----Check all parameters-----#","\n")
+      cat("	for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
+      cat("	do","\n")
+      cat("		echo \"GOT HERE\"","\n")
+      cat("		#-----Check if parameter directory exists-----#","\n")
+      cat("		if [ -d Results/$expName/$i/ ]","\n")
+      cat("			then","\n")
+      cat("				","\n")
+      cat("				 analyseIterations ","\n")
+      cat("			else","\n")
+      cat("				echo -e \"Directory parameter '$i' does not exist\n \"","\n")
+      cat("		fi","\n")
+      cat("	done","\n")
+      cat("	wait","\n")
+      cat("	paste -d, Results/$expName/*.csv > Results/$expName.csv","\n")
+      cat("	rm -f Results/$expName/*.csv","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("function analyseIterations () {","\n")
+      cat("	#-----Check all iterations-----#","\n")
+      cat("	for ((j= $initialRunNumber; j <= $finalRunNumber; j = j + $stepRunNumber))","\n")
+      cat("	do","\n")
+      cat("		#-----Check if iteration exists-----#","\n")
+      cat("		if [ -d Results/$expName/$i/$j/ ] ","\n")
+      cat("			then","\n")
+      cat("				analyseFiles","\n")
+      cat("		fi","\n")
+      cat("	done	","\n")
+      cat("	","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("function analyseFiles () {","\n")
+      cat("","\n")
+      cat("	#Copy head and tail from each file into a new file that only has header and final row","\n")
+      cat("	head -n 1 Results/$expName/$i/$j/global.csv >> Results/$expName/$i/$j/$processedFileName","\n")
+      cat("	tail -n 1 Results/$expName/$i/$j/global.csv >> Results/$expName/$i/$j/$processedFileName","\n")
+      cat("	","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("function moveFiles(){","\n")
+      cat("	#If there is a previous file of the same name remove it ","\n")
+      cat("	if [ -f $OutFileName ]","\n")
+      cat("		then rm -rf $OutFileName","\n")
+      cat("	fi","\n")
+      cat("			","\n")
+      cat("	if [ -d tempDir ]","\n")
+      cat("		then echo \"Directory Already Exists\"","\n")
+      cat("		else mkdir tempDir","\n")
+      cat("	fi","\n")
+      cat("	for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
+      cat("	","\n")
+      cat("	do","\n")
+      cat("		iterateThroughFiles","\n")
+      cat("	done	","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("#Once the parameter number folder has been accessed, iterate through all the files in this, copying the results from this into a temporary folder","\n")
+      cat("function iterateThroughFiles(){","\n")
+      cat("	for ((j= $initialRunNumber; j <= $finalRunNumber; j = j +$stepRunNumber))","\n")
+      cat("	do	","\n")
+      cat("		echo $expName/$i/$j","\n")
+      cat("		cp -R Results/$expName/$i/$j/final_row.csv tempDir/${i}_${j}.csv","\n")
+      cat("	done","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("function combineCSVFiles(){","\n")
+      cat("	","\n")
+      cat("	c=0                                       # Reset a counter","\n")
+      cat("	for ((j= $initialRunNumber; j <= $finalRunNumber; j = j +$stepRunNumber))","\n")
+      cat("	","\n")
+      cat("	do","\n")
+      cat("		for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
+      cat("		do","\n")
+      cat("			for filename in ./tempDir/${i}_${j}.csv; do ","\n")
+      cat("				 echo $filename","\n")
+      cat("				 if [ \"$filename\"  != \"$OutFileName\" ] ;      # Avoid recursion ","\n")
+      cat("				 then ","\n")
+      cat("				   if [[ $c -eq 0 ]] ; then ","\n")
+      cat("				      head -1  $filename >   $OutFileName # Copy header if it is the first file","\n")
+      cat("				   fi","\n")
+      cat("				   tail -n +2  $filename >>  $OutFileName # Append from the 2nd line each file","\n")
+      cat("				   c=$(( $c + 1 ))                        # Increase the counter","\n")
+      cat("				 fi","\n")
+      cat("			done","\n")
+      cat("		done","\n")
+      cat("	done","\n")
+      cat("","\n")
+      cat("	echo \"Would you like to delete the temporary folder of files? (y/n)\"","\n")
+      cat("	read tempANS","\n")
+      cat("","\n")
+      cat("	if [ \"$tempANS\" == y ]","\n")
+      cat("	then ","\n")
+      cat("		rm -rf tempDir","\n")
+      cat("	fi","\n")
+      cat("	","\n")
+      cat("	","\n")
+      cat("	#Remove commas from end of line","\n")
+      cat("	for commaRemove in $OutFileName ","\n")
+      cat("		do","\n")
+      cat("		cat $commaRemove | sed 's/,$//' > tmp.tmp","\n")
+      cat("		mv tmp.tmp $commaRemove","\n")
+      cat("	done","\n")
+      cat("","\n")
+      cat("","\n")
+      cat("	echo \"Would you like to combine the parameter file with results file? (y/n)\"","\n")
+      cat("	read ANS","\n")
+      cat("	","\n")
+      cat("	if [ \"$ANS\" == y ]","\n")
+      cat("	then ","\n")
+      cat("		paste -d , $DataFileName $OutFileName > $CombinedOutputFileName","\n")
+      cat("	fi","\n")
+      cat("}","\n")
+      cat("","\n")
+      cat("#-----Check if type directory exists-----#","\n")
+      cat("clear","\n")
+      cat("echo \"Processing data!\"","\n")
+      cat("if [ -d Results/$expName/ ]","\n")
+      cat("	then 	","\n")
+      cat("		echo \"Start!\"","\n")
+      cat("		analyseParameters","\n")
+      cat("		echo \"End!\"","\n")
+      cat("        	else ","\n")
+      cat("        		echo -e \"Directory type '$expName' does not exist\n \"","\n")
+      cat("fi","\n")
+      cat("moveFiles","\n")
+      cat("combineCSVFiles","\n")
+      cat("","\n")
+      sink()
+      
+      showModal(modalDialog(
+        title = "Complete",
+        "Cluster files made"))
     }
   )
   
+  observeEvent(input$setVariables,
+    {
+      sink(paste0(input$argosDirectory, "/", input$analysisType, "_variables.sh"))
+      cat("#$-S /bin/bash", "\n", "\n")
+      cat("export length=1000", "\n") #Allow user to choose length
+      cat("export expName=argos_experiment_set_", "\n", "\n") #Again for future allow user to choose this
+      cat("export initialRunNumber=1", "\n")
+      cat(paste0("export finalRunNumber=", input$numSamples), "\n")
+      cat("export stepRunNumber=1", "\n", "\n")
+      cat("export initialSeedIterationNumber=1", "\n")
+      cat(paste0("export finalSeedIterationNumber=", input$numExecutions), "\n")
+      cat("export stepSeedIterationNumber=1", "\n", "\n")
+      cat(paste0("export OutFileName=\"", input$analysisType, "NoParameters.csv\""),"\n")
+      cat(paste0("export DataFileName=\"", input$analysisType, "Data.csv\""),"\n")
+      cat(paste0("export CombinedOutputFileName=\"", input$analysisType, "CombinedParamsAndResults.csv\""), "\n")
+      cat(paste0("export processedFileName=\"", input$analysisType, "_final_row.csv\""))
+      sink()
+      
+      showModal(modalDialog(
+        title = "Complete",
+        "Cluster variables file made"))
+      
+    })
+    
   #### Action when Add to Database is Pressed
   observeEvent(
     input$addToDB,
@@ -185,16 +880,21 @@ server <- function(input, output, session) {
       {
         if(input$description!="")
         {
-          rmysql.settingsfile<-"/home/kja505/Documents/sql_settings/newspaper_search_results.cnf"
-          rmysql.db<-"spartan_ppsim"
-          dblink<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
-          experiment_id <- setup_experiment(dblink,"LHC","2018-08-22","robospartan test sample 3")
-        
-          add_parameter_set_to_database(dblink, myValues$sample,experiment_id)
-        
-          showModal(modalDialog(
-            title = "Important message",
-            paste("Experiment ID: ",experiment_id,sep="")))
+          if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
+          {
+            add_existing_lhc_sample_to_database(dblink, myValues$sample, experiment_description="Original ppsim lhc dataset")
+          }
+          
+          else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
+          {
+            add_existing_efast_sample_to_database(dblink, parameters, input$numCurves, parameters_r_object=myValues$sample, experiment_description="Original PPSim eFAST")
+          }
+          
+          else if(input$analysisType == "Robustness")
+          {
+            add_existing_robustness_sample_to_database(dblink, parameters, parameters_r_object=myValues$sample, experiment_description="Original PPSim Robustness")
+          
+          }  
         }
         else
         {
@@ -214,20 +914,37 @@ server <- function(input, output, session) {
     }
   )
   
+  observeEvent(input$createDB, 
+               create_database_structure(dblink, parameters, measures)) #Allow the user to create a database based on their parameters 
+  observeEvent(input$deleteDB, delete_database_structure(dblink)) #Allows the user to delete database structure
   
   #### Action when Clear Parameter is pressed
   observeEvent(
     input$clearParameter,
     {
+      Decimal_or_Rounded <<- c()
+      shinyjs::hideElement("main")
+      shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
+      shinyjs::disable("createARGoSFiles") 
+      sampleCreated <<- FALSE
       parameters<<-c()
       mins<<-c()
       maxs<<-c()
+      increments<<-c()
+      baselines<<-c()
+      wholeNumbers <<- c()
       myValues$sampleGenerated<-FALSE
     
       myValues$table<-NULL
+      
+      #change values back to the default
       updateTextInput(session, "parameter", value = "")     
-      updateTextInput(session, "min", value = "")
-      updateTextInput(session, "max", value = "")
+      updateTextInput(session, "min", value = 0)
+      updateTextInput(session, "max", value = 0)
+      updateTextInput(session, "baseline", value = 0)
+      updateTextInput(session, "robustnessIncrement", value = 0)
+      updateCheckboxInput(session, "wholeNumber", value = FALSE)
+      
       # Need to clear the generated sample to:
       if(!is.null(myValues$sample))
       {
@@ -243,9 +960,18 @@ server <- function(input, output, session) {
   observeEvent(
     input$addParameter,
     {
+    shinyjs::showElement("main")
     if(input$addParameter > 0){
-  
-      if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max))
+      inputTest <- list(input$min, input$max)
+      positiveNumber <<- TRUE
+      for(positiveTest in 1:length(inputTest)) #checking the min and max values are positive numbers
+      { 
+        if (inputTest[positiveTest] < 0)
+        {  
+          positiveNumber <<- FALSE  
+        } 
+      }
+      if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max) && positiveNumber == TRUE)
       {
         if(input$min < input$max)
         {
@@ -255,13 +981,47 @@ server <- function(input, output, session) {
           
           parameters<<-c(parameters,parameter)
           
+          if (input$wholeNumber == TRUE)
+          {
+            wholeNumbers <<- c(wholeNumbers, length(parameters))
+            wholeNumbersBool <<- "Whole Number"
+          }
+          else 
+          {
+            wholeNumbersBool <<- "Decimal"  
+          }
+
+          if (input$analysisType != "Robustness")
+          {
+            baseline <- "N/A"
+            increment <- "N/A"
+          }
+          else 
+          {
+            baseline <- isolate(input$baseline)
+            increment <- isolate(input$robustnessIncrement)
+            wholeNumbersBool <<- "N/A"
+          }
+          
           mins<<-c(mins,as.numeric(min))
           maxs<<-c(maxs,as.numeric(max))
-          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max))
-  
+          baselines<<-c(baselines,as.numeric(baseline))
+          increments<<-c(increments, as.numeric(increment))
+          
+          Decimal_or_Rounded <<- c(Decimal_or_Rounded, wholeNumbersBool)
+          
+          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max,increment,baseline))
+          
+          #Change option boxes back to default 
           updateTextInput(session, "parameter", value = "")     
-          updateTextInput(session, "min", value = "")
-          updateTextInput(session, "max", value = "")
+          updateTextInput(session, "min", value = 0)
+          updateTextInput(session, "max", value = 0)
+          updateTextInput(session, "baseline", value = 0)
+          updateTextInput(session, "robustnessIncrement", value = 0)
+          updateCheckboxInput(session, "wholeNumber", value = FALSE)
+          
+          shinyjs::show("createSample") #Allow the user to click the show sample button
+          
         }
         else
         {
@@ -274,12 +1034,12 @@ server <- function(input, output, session) {
       }
       else
       {
-        # Either parameter is blank, or min/max are not numeric
+        # Either parameter is blank, or min/max are not numeric, or value is negative
         updateTextInput(session, "min", value = "")
         updateTextInput(session, "max", value = "")
         showModal(modalDialog(
           title = "Error in Input",
-          "Either parameter name is blank, or minimum or maximum are not numeric"))
+          "Either parameter name is blank, minimum or maximum are not numeric, or a value is negative"))
       }
     }
       }
@@ -289,8 +1049,13 @@ server <- function(input, output, session) {
   output$parameter_table<-renderTable({
     if(length(myValues$table)>1)
     {
-      colnames(myValues$table) <- c("Parameter","Min","Max")
-      myValues$table
+      #This is the column names for the settings file
+      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline")
+      
+      #This part changes only what the user sees on screen and not what gets downloaded in the settings file, as there is no need to know about rounding in the settings file.
+      forUserToSee <- cbind(myValues$table, Decimal_or_Rounded)
+      colnames(forUserToSee) <- c("Parameter","Min","Max", "Increment", "Baseline", "Decimal/Whole Number")
+      forUserToSee #show the user the table
     }
     
   })
@@ -299,7 +1064,7 @@ server <- function(input, output, session) {
     output$table_header <- renderUI({
     if(length(myValues$table)>1)
     {
-      h4("Parameters Declared:")
+      h4("Parameters Declared For", input$analysisType, ":")
     }
   })
 }

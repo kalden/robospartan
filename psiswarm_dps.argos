@@ -1,4 +1,9 @@
 <?xml version="1.0" ?>
+<!-- ****************************************************** -->
+<!-- * AUTHOR: Edgar Buchanan <edgar.buchanan@york.ac.uk> * -->
+<!-- * Task partitioning xml file		              		    * -->
+<!-- ****************************************************** -->
+
 <argos-configuration>
 
   <!-- ************************* -->
@@ -120,7 +125,7 @@
           look_at="0,0,0"
           lens_focal_length="20" />
       </camera>
-      <user_functions label="psiswarm_dps_qt_user_functions" />
+      <!-- <user_functions label="psiswarm_dps_qt_user_functions" /> -->
     </qt-opengl>
   </visualization> 
 </argos-configuration>
