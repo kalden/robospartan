@@ -10,8 +10,6 @@ library(shiny)
 library(shinyjs)
 library(DT)
 library(spartan)
-library(DBI)
-library(RMySQL)
 library(readr) #Required for wrtie_csv on MacOS
 #library(spartanDB)
 
@@ -31,7 +29,7 @@ resultReplicas <- c()
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
-  useShinyjs(),
+  shinyjs::useShinyjs(),
   
    # Application title
    h3("Generate Parameter Sets Using Different Sampling Techniques"),
@@ -124,72 +122,75 @@ ui <- fluidPage(
          fileInput(inputId = "argosFiles",
                    label = "Argos File To Modify:"),
          
-         h6(tags$em("Please ensure to not end your file path with a '/' character, else it will count as a false file path")),  
+         #textInput(inputId = "argosDirectory",
+        #           label = "Type the full file directory where you wish the ARGoS file to save:"),
          
-         textInput(inputId = "argosDirectory",
-                   label = "Type the full file directory where you wish the ARGoS file to save:",
-                   value = "/home/fgch500/robospartan/argosFiles"),
+         #tags$style("#argosDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
          
-         tags$style("#argosDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+        # textInput(inputId = "argosDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
          
-         textInput(inputId = "argosDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         #tags$style("#argosDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
          
-         tags$style("#argosDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         #textInput(inputId = "argosDirComplete", label =NULL, value = "True File Path", width = '100%'),
          
-         textInput(inputId = "argosDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         #hr(), hr(), hr(),
          
-         hr(), hr(), hr(),
+        # textInput(inputId = "zipDirectory",
+         #          label = "Type the full file directory where zip of ARGoS Files should be saved:"),
+        
+        #h6(tags$em("Please ensure to not end your file path with a '/' character, else it will count as a false file path")),  
          
-         textInput(inputId = "zipDirectory",
-                   label = "Type the full file directory where you wish the ZIP file to save:",
-                   value = "/home/fgch500/robospartan/argosFilesZip"),
+         #tags$style("#zipDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
          
-         tags$style("#zipDirNotComplete {border: 4px solid #dd4b39; float: right;  text-align: center; font-weight: bold;}"),
+         #textInput(inputId = "zipDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
          
-         textInput(inputId = "zipDirNotComplete", label =NULL, value = "False File Path", width = '100%'),
+         #tags$style("#zipDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
          
-         tags$style("#zipDirComplete {border: 4px solid #008000; float: right;  text-align:center; font-weight: bold;}"),
+         #textInput(inputId = "zipDirComplete", label =NULL, value = "True File Path", width = '100%'),
          
-         textInput(inputId = "zipDirComplete", label =NULL, value = "True File Path", width = '100%'),
+         #hr(), hr(), hr(),
          
-         hr(), hr(), hr(),
+         #textInput(inputId = "zipName", label = "Enter the name you'd like the zip file saved as", value = "argos_sample_files.zip", width = '100%'),
          
-         textInput(inputId = "zipName", label = "Enter the name you'd like the zip file saved as", value = "argosZIP", width = '100%'),
-         
-         actionButton(inputId = "createARGoSFiles",
-                   label = 'Modify ARGoS Files'),
+         #actionButton(inputId = "createARGoSFiles",
+        #           label = 'Modify ARGoS Files'),
+        
+         downloadButton(outputId = "createARGoSFiles", label = "Download Modified ARGoS Files"),
 
-         actionButton(inputId = "setVariables",
-                      label = "Set Variables for Simulation Runs"),
+         #actionButton(inputId = "setVariables",
+        #              label = "Set Variables for Simulation Runs"),
          
-         actionButton(inputId = "cluster",
-                      label = "Add to Cluster")
+        
+        downloadButton(outputId = "cluster", label = "Generate SGE Cluster Script")
+        #actionButton(inputId = "cluster",
+        #              label = "Generate SGE Cluster Script")
        ),
       
-      wellPanel(
+      ## Database section not included in this release
+      #wellPanel(
         
-        h4("Database:"),
+      #  h4("Database:"),
       
-        fileInput(inputId = "DBSettings",
-                  label = "Database Settings File:"),
+      #  fileInput(inputId = "DBSettings",
+      #            label = "Database Settings File:"),
         
-        actionButton(inputId = "createDB",
-                     label = "Make Database"),
+      #  actionButton(inputId = "createDB",
+      #               label = "Make Database"),
         
-        actionButton(inputId = "deleteDB",
-                     label = "Delete Database"),
+      #  actionButton(inputId = "deleteDB",
+      #               label = "Delete Database"),
         
-        br(), br(),
+      #  br(), br(),
         
-        textInput(inputId = "description",
-                  label = "Experiment Description:",
-                  value = ""),
+      #  textInput(inputId = "description",
+      #            label = "Experiment Description:",
+      #            value = ""),
         
-        actionButton(inputId = "addToDB",
-                  label = 'Add Experiment to Database')
+      #  actionButton(inputId = "addToDB",
+      #            label = 'Add Experiment to Database')
         
         
-      ),
+      #),
       
       width = 5),
       
@@ -225,7 +226,8 @@ server <- function(input, output, session) {
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
-  shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
+  #shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
+  shinyjs::hide("createARGoSFiles")
   shinyjs::hide("addToDB")
   shinyjs::hide("createDB")
   shinyjs::hide("cluster")
@@ -236,12 +238,15 @@ server <- function(input, output, session) {
   shinyjs::hide("zipDirNotComplete")
   shinyjs::hide("zipDirComplete")
   shinyjs::hide("zipName")
-  shinyjs::hide("setVariables")
+  #shinyjs::hide("setVariables")
   shinyjs::disable("clearMeasures")
   #shinyjs::hideElement("main")
   shinyjs::hide("settingFile")
   shinyjs::hide("wholeNumber")
   sampleCreated <<- FALSE #Flag to determine whether a sample has been created
+  
+  rv <- reactiveValues(download_flag = 0)
+  
   #### Hide the sample table if not generated yet
   observe({
     shinyjs::hide("lhc_sample")
@@ -250,6 +255,7 @@ server <- function(input, output, session) {
       shinyjs::show("lhc_sample")
       
   })
+  
   
   observeEvent(
     input$analysisType,
@@ -355,8 +361,9 @@ server <- function(input, output, session) {
   
   observeEvent(input$argosFiles,
       {
-        shinyjs::show("argosDirectory")
-        shinyjs::show("zipDirectory")
+        #shinyjs::show("argosDirectory")
+        #shinyjs::show("zipDirectory")
+        shinyjs::show("createARGoSFiles")
       })
   
   observeEvent(input$argosDirectory,
@@ -364,14 +371,14 @@ server <- function(input, output, session) {
                   if(!is.null(input$argosFiles$datapath)){
                    if(file.exists(input$argosDirectory) && substr(input$argosDirectory, nchar(input$argosDirectory), nchar(input$argosDirectory)) != "/")
                    {
-                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::show("createARGoSFiles")
                      shinyjs::hide("argosDirNotComplete")
                      shinyjs::show("argosDirComplete")
                      
                    }
                    else
                    {
-                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::hide("createARGoSFiles")
                      shinyjs::show("argosDirNotComplete")
                      shinyjs::hide("argosDirComplete")
                    }
@@ -383,7 +390,7 @@ server <- function(input, output, session) {
                  if(!is.null(input$argosFiles$datapath)){
                    if(file.exists(input$zipDirectory) && substr(input$zipDirectory, nchar(input$zipDirectory), nchar(input$zipDirectory)) != "/")
                    {
-                     shinyjs::enable("createARGoSFiles")
+                     shinyjs::show("createARGoSFiles")
                      shinyjs::hide("zipDirNotComplete")
                      shinyjs::show("zipDirComplete")
                      shinyjs::show("zipName")
@@ -391,7 +398,7 @@ server <- function(input, output, session) {
                    }
                    else
                    {
-                     shinyjs::disable("createARGoSFiles")
+                     shinyjs::hide("createARGoSFiles")
                      shinyjs::show("zipDirNotComplete")
                      shinyjs::hide("zipDirComplete")
                      shinyjs::hide("zipName")
@@ -412,36 +419,95 @@ server <- function(input, output, session) {
                }
                )
                  
+  # Used to show message once download is created (as this can take time)
+  #observeEvent(rv$download_flag, {
+  #  shinyjs::alert("File downloaded!")
+  #}, ignoreInit = TRUE)
+  
+  # Create ARGoSFiles now done as a download button
+  output$createARGoSFiles <- downloadHandler(
+    filename = function() {
+      paste0(input$analysisType,"Modified_ARGoS_Files.zip")
+    },
+    content = function(file) { 
+      
+      if(!file.exists(file.path(getwd(),"argosFiles")))
+        dir.create(file.path(getwd(),"argosFiles"))
+      
+      #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
+      #dir.create(file.path(input$argosDirectory, "experiments"))
+      #dir.create(file.path(input$argosDirectory, "logs"))
+      #dir.create(file.path(input$argosDirectory, "Results"))
+      #directory <<- paste0(input$argosDirectory, "/experiments")
+      
+      #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
+      #zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
+      #zipName <- input$zipName
+      #print(result)
+      #filesToModify <- 
+      #showModal(modalDialog(
+      #  title = "Creating ARGoS Files",
+      #  "ARGoS files are being created..."))
+      #print(input$numExecutions)
+      make_argos_file_from_sample(input$argosFiles$datapath, file.path(getwd(),"argosFiles"), parameters, result)
+      
+      #current_wd<-getwd()
+      #setwd(directory)
+      zip(zipfile = file, dir(file.path(getwd(),"argosFiles"), full.names = TRUE), flags="-qjr")
+      #showModal(modalDialog(
+      #  title = "Zip File Created",
+      #  "A Zip file of ARGoS files has been created at:       ", file))
+      
+      for(s in 1:nrow(myValues$sample)) #Remove all XML files once they've been zipped
+      {
+        file.remove(file.path(getwd(),"argosFiles", paste0("argos_experiment_set_",s,".argos")))
+      }
+      # Remove the generated directory
+      unlink(file.path(getwd(),"argosFiles"),recursive=TRUE, force=TRUE)
+      
+      # Change the wd back
+      #setwd(current_wd)
+      
+      shinyjs::show("cluster")
+    })
+  
+  
   #Modify ARGoS files
-  observeEvent(input$createARGoSFiles,  
-     {
-      if (!is.null(input$argosFiles$datapath) && sampleCreated){
+  # No longer used
+  #observeEvent(input$createARGoSFiles,  
+  #   {
+  #    if (!is.null(input$argosFiles$datapath) && sampleCreated){
+  #      if(!file.exists(file.path(getwd(),"argosFiles")))
+  #        dir.create(file.path(getwd(),"argosFiles"))
+        
+  #      directory<-file.path(getwd(),"argosFiles")
          #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
-         dir.create(file.path(input$argosDirectory, "experiments"))
-         dir.create(file.path(input$argosDirectory, "logs"))
-         dir.create(file.path(input$argosDirectory, "Results"))
-         directory <<- paste0(input$argosDirectory, "/experiments")
+         #dir.create(file.path(input$argosDirectory, "experiments"))
+         #dir.create(file.path(input$argosDirectory, "logs"))
+         #dir.create(file.path(input$argosDirectory, "Results"))
+         #directory <<- paste0(input$argosDirectory, "/experiments")
+         
          #zipLocation <-  "/home/fgch500/robospartan/argosFilesZip/ARGoSFilesZip"  #File destination followed by folder and file name where the zipped file should go
-         zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
-         zipName <- input$zipName
-         print(result)
-         filesToModify <- input$argosFiles$datapath
-         showModal(modalDialog(
-           title = "Creating ARGoS Files",
-           "ARGoS files are being created..."))
-         print(input$numExecutions)
-         make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation, "/", zipName), input$numExecutions)
-         shinyjs::show("cluster")
-         shinyjs::show("setVariables")
-      }
+  #       zipLocation <-  input$zipDirectory  #File destination followed by folder and file name where the zipped file should go 
+  #       zipName <- input$zipName
+         #print(result)
+  #       filesToModify <- input$argosFiles$datapath
+  #       showModal(modalDialog(
+  #         title = "Creating ARGoS Files",
+  #         "ARGoS files are being created..."))
+         #print(input$numExecutions)
+  #       make_argos_file_from_sample(filesToModify, directory, parameters, result, paste0(zipLocation, "/", zipName), input$numExecutions)
+  #       shinyjs::show("cluster")
+  #       #shinyjs::show("setVariables")
+  #    }
        
-      else {
-          showModal(modalDialog(
-            title = "No Sample found",
-            "You must first create a sample with your chosen parameters and values"))
-      }
-     } 
-  )
+  #    else {
+  ##        showModal(modalDialog(
+  #          title = "No Sample found",
+  #          "You must first create a sample with your chosen parameters and values"))
+  #    }
+  #   } 
+  #)
       
   #### Action when Create Sample is pressed
   observeEvent(input$createSample,
@@ -615,11 +681,23 @@ server <- function(input, output, session) {
       shinyjs::show("createDB")
     })
   
-  #Write a bash script to send the simulation to the cluster
-  observeEvent(
-    input$cluster, 
-    {
-      sink(paste0(input$argosDirectory, "/", input$analysisType, "_cluster_argos.sh"))
+  
+  
+  # Generate and download the SGE cluster scripts
+  output$cluster <- downloadHandler(
+    filename = function() {
+      paste0(input$analysisType,"Cluster_Scripts.zip")
+    },
+    content = function(file) { 
+  
+      if(!file.exists(file.path(getwd(),"cluster_scripts")))
+        dir.create(file.path(getwd(),"cluster_scripts"))
+      
+      
+      # Creates the scripts in the current directory, zips these two up, then offers for download
+      sink(file.path(getwd(),"cluster_scripts",paste0(input$analysisType, "_cluster_argos.sh")))
+      
+      # KA: Incorporated variables script into this one, to save the need for two scripts
       cat("#!/bin/bash","\n")
       cat("#$-cwd","\n")
       cat(paste0("#$-t 1-", input$numSamples),"\n")
@@ -628,6 +706,21 @@ server <- function(input, output, session) {
       cat("#$ -o ./logs/","\n")
       cat("#$ -e ./logs/","\n")
       cat("","\n")
+      
+      # Old variables script here
+      cat("length=1000", "\n") #Allow user to choose length
+      cat("expName=argos_experiment_set_", "\n", "\n") #Again for future allow user to choose this
+      cat("initialRunNumber=1", "\n")
+      cat(paste0("finalRunNumber=", input$numSamples), "\n")
+      cat("stepRunNumber=1", "\n", "\n")
+      cat("initialSeedIterationNumber=1", "\n")
+      cat(paste0("finalSeedIterationNumber=", input$numExecutions), "\n")
+      cat("stepSeedIterationNumber=1", "\n", "\n")
+      cat(paste0("OutFileName=\"", input$analysisType, "NoParameters.csv\""),"\n")
+      cat(paste0("DataFileName=\"", input$analysisType, "Data.csv\""),"\n")
+      cat(paste0("CombinedOutputFileName=\"", input$analysisType, "CombinedParamsAndResults.csv\""), "\n")
+      cat(paste0("processedFileName=\"", input$analysisType, "_final_row.csv\"","\n"))
+      
       cat("# Parameter","\n")
       cat("function analyseParameters() {","\n")
       cat("	for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
@@ -675,9 +768,9 @@ server <- function(input, output, session) {
       cat("}","\n")
       cat("","\n")
       cat("","\n")
-      cat("# Variables","\n")
-      cat("source ./Latin-Hypercube_variables.sh","\n")
-      cat("","\n")
+      #cat("# Variables","\n")
+      #cat("source ./Latin-Hypercube_variables.sh","\n")
+      #cat("","\n")
       cat("FILE=$expName","\n")
       cat("","\n")
       #cat("VAR=\"Output\n\"","\n")
@@ -703,12 +796,29 @@ server <- function(input, output, session) {
       cat("","\n")
       sink()
       
-      sink(paste0(input$argosDirectory, "/", "processDataAndCombineResults.sh"))
+      # Creates the scripts in the current directory, zips these two up, then offers for download
+      sink(file.path(getwd(),"cluster_scripts","processDataAndCombineResults.sh"))
+      
       cat("#!/bin/bash","\n")
       cat("","\n")
-      cat("#-----Import variables-----#","\n")
-      cat("source ./Latin-Hypercube_variables.sh","\n")
-      cat("","\n")
+      #cat("#-----Import variables-----#","\n")
+      #cat("source ./Latin-Hypercube_variables.sh","\n")
+      #cat("","\n")
+      
+      # Old variables script here
+      cat("length=1000", "\n") #Allow user to choose length
+      cat("expName=argos_experiment_set_", "\n", "\n") #Again for future allow user to choose this
+      cat("initialRunNumber=1", "\n")
+      cat(paste0("finalRunNumber=", input$numSamples), "\n")
+      cat("stepRunNumber=1", "\n", "\n")
+      cat("initialSeedIterationNumber=1", "\n")
+      cat(paste0("finalSeedIterationNumber=", input$numExecutions), "\n")
+      cat("stepSeedIterationNumber=1", "\n", "\n")
+      cat(paste0("OutFileName=\"", input$analysisType, "NoParameters.csv\""),"\n")
+      cat(paste0("DataFileName=\"", input$analysisType, "Data.csv\""),"\n")
+      cat(paste0("CombinedOutputFileName=\"", input$analysisType, "CombinedParamsAndResults.csv\""), "\n")
+      cat(paste0("processedFileName=\"", input$analysisType, "_final_row.csv\"","\n"))
+      
       cat("function analyseParameters () {","\n")
       cat("	#-----Check all parameters-----#","\n")
       cat("	for ((i= $initialSeedIterationNumber; i <= $finalSeedIterationNumber; i = i + $stepSeedIterationNumber))","\n")
@@ -842,15 +952,49 @@ server <- function(input, output, session) {
       cat("","\n")
       sink()
       
-      showModal(modalDialog(
-        title = "Complete",
-        "Cluster files made"))
+      zip(zipfile = file, dir(file.path(getwd(),"cluster_scripts"), full.names = TRUE), flags="-qjr")
+      
+      file.remove(file.path(getwd(),"cluster_scripts","processDataAndCombineResults.sh"))
+      file.remove(file.path(getwd(),"cluster_scripts",paste0(input$analysisType, "_cluster_argos.sh")))
+      unlink(file.path(getwd(),"cluster_scripts"),recursive=TRUE,force=TRUE)
     }
   )
   
+  
+  
+  
+  
+  #Write a bash script to send the simulation to the cluster
+  # KA - no longer used
+  #observeEvent(
+  #  input$cluster, 
+  #  {
+  #    if(!file.exists(file.path(getwd(),"cluster_scripts")))
+  #      dir.create(file.path(getwd(),"cluster_scripts"))
+      
+      # Script generation part was previously here, now above
+      
+     
+      
+      # Zip these two together
+      #current_wd<-getwd()
+      #setwd(file.path(getwd(),"cluster_scripts"))
+      
+      
+      #setwd(current_wd)
+      
+    
+      
+      
+  #    showModal(modalDialog(
+  #      title = "Complete",
+  #      "Cluster files made"))
+  #  }
+  #)
+  
   observeEvent(input$setVariables,
     {
-      sink(paste0(input$argosDirectory, "/", input$analysisType, "_variables.sh"))
+      sink(paste0(input$zipDirectory, "/", input$analysisType, "_variables.sh"))
       cat("#$-S /bin/bash", "\n", "\n")
       cat("export length=1000", "\n") #Allow user to choose length
       cat("export expName=argos_experiment_set_", "\n", "\n") #Again for future allow user to choose this
@@ -925,6 +1069,7 @@ server <- function(input, output, session) {
       Decimal_or_Rounded <<- c()
       shinyjs::hideElement("main")
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
+      shinyjs::hide("createARGosFiles")
       shinyjs::disable("createARGoSFiles") 
       sampleCreated <<- FALSE
       parameters<<-c()

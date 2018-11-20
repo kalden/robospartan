@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<GColumn Name="Gross">
-  <dataHead>
-    <data year="2015" value="0"/>
-    <data year="2016" value="0"/>
-  </dataHead>
-</GColumn>
