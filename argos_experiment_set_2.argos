@@ -28,7 +28,7 @@
         <!-- * Correction rate (Alpha)				                 * -->
         <!-- * Error type: 0. homogeneous 1. Heterogeneous     * -->
         <!-- *************************************************** -->
-        <partitioning partition_type="4" initial_partition_length="28" gain="20" alpha="50" epsilon="8" memory_factor="24" error_type="0"/>
+        <partitioning partition_type="4" initial_partition_length="28" gain="20" alpha="50" epsilon="32" memory_factor="33" error_type="0"/>
       </params>
     </psiswarm_dps>
   </controllers>
@@ -39,7 +39,7 @@
   <!-- * 0 - direct transfer * -->
   <!-- * 1 - indirect transfer * -->
   <loop_functions library="build/loop_functions/psiswarm_dps_loop_functions/libpsiswarm_dps_loop_functions" label="psiswarm_dps_loop_functions">
-    <dps individual="Results/A/B/C/individual.csv" global="Results/A/B/C/global.csv" transfer_type="1" home_source_distance="1.8"/>
+    <dps individual="Results/A/B/C/individual.csv" global="Results/A/B/C/global.csv" transfer_type="1" home_source_distance="31"/>
   </loop_functions>
   <!-- *********************** -->
   <!-- * Arena configuration * -->
@@ -64,7 +64,7 @@
     <distribute>
       <position method="grid" center="0.2,0,0" distances="0.4,0.15,0" layout="2,3,1"/>
       <orientation method="constant" values="180,0,0"/>
-      <entity quantity="12" max_trials="1">
+      <entity quantity="30" max_trials="1">
         <psi-swarm id="psiswarm">
           <controller config="psiswarm_dps"/>
         </psi-swarm>

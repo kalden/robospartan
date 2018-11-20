@@ -10,6 +10,7 @@
 library(xml2)
 library(shinycssloaders)
 
+
 #' Recursively search the XML file for the tag attributes that are being changed
 #' @param child_nodes Current set of child nodes being examined
 #' @param attribute_name Name of the attribute to find
