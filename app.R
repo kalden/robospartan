@@ -32,7 +32,7 @@ ui <- fluidPage(
   shinyjs::useShinyjs(),
   
    # Application title
-   h3("Generate Parameter Sets Using Different Sampling Techniques"),
+   h3("RoboSpartan Sampling: Generate Parameter Sets Using Different Sampling Techniques"),
    
    # LHC: Parameters
    # Number of Samples
@@ -120,7 +120,7 @@ ui <- fluidPage(
          hr(),
          
          fileInput(inputId = "argosFiles",
-                   label = "Argos File To Modify:"),
+                   label = "ARGoS File To Modify:"),
          
          #textInput(inputId = "argosDirectory",
         #           label = "Type the full file directory where you wish the ARGoS file to save:"),
@@ -192,7 +192,7 @@ ui <- fluidPage(
         
       #),
       
-      width = 5),
+      width = 4),
       
       # Show a plot of the generated distribution
       mainPanel(id = "main",
@@ -212,7 +212,7 @@ ui <- fluidPage(
         downloadButton(outputId = "lhc_sample", label = "Download data"),
        
         
-        width=7
+        width=8
       )
    )
    
@@ -227,7 +227,8 @@ server <- function(input, output, session) {
   myValues$sampleGenerated<-FALSE
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
   #shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
-  shinyjs::hide("createARGoSFiles")
+  shinyjs::hide("argosFiles")
+  shinyjs::hide("createARGoSFiles") 
   shinyjs::hide("addToDB")
   shinyjs::hide("createDB")
   shinyjs::hide("cluster")
@@ -245,6 +246,8 @@ server <- function(input, output, session) {
   shinyjs::hide("wholeNumber")
   sampleCreated <<- FALSE #Flag to determine whether a sample has been created
   
+  measures <- c()
+  
   rv <- reactiveValues(download_flag = 0)
   
   #### Hide the sample table if not generated yet
@@ -252,7 +255,10 @@ server <- function(input, output, session) {
     shinyjs::hide("lhc_sample")
     
     if(myValues$sampleGenerated==TRUE)
+    {
       shinyjs::show("lhc_sample")
+      shinyjs::show("argosFiles")
+    }
       
   })
   
@@ -292,11 +298,12 @@ server <- function(input, output, session) {
   observeEvent(input$addMeasure,
                {
                  if (input$measures != ""){
-                   measures <<- c(measures, input$measures)
+                   measures <- c(measures, input$measures)
                    print(measures)
                    updateTextInput(session, inputId = "measures", value = "")
                    measureValues$table <- rbind(c("Measures:", measures))
                    columnNames <<- c(columnNames, paste0("Measure ", measureCounter))
+                   ## KA: ERROR OCCURRING IN LINE 307
                    colnames(measureValues$table) <- columnNames
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
                    shinyjs::enable("clearMeasures")
@@ -307,12 +314,12 @@ server <- function(input, output, session) {
   
   observeEvent(input$clearMeasures,
                {
-                 measures <<- c()
+                 measures <- c()
                  updateTextInput(session, inputId = "measures", value = "")
                  shinyjs::disable("clearMeasures")
                  output$measures_table <-  NULL
                  measureValues$table
-                 columnNames <<- c("Measures")
+                 columnNames <- c("Measures")
                  measureCounter <<- 1
                  
                })
@@ -1138,8 +1145,8 @@ server <- function(input, output, session) {
 
           if (input$analysisType != "Robustness")
           {
-            baseline <- "N/A"
-            increment <- "N/A"
+            baseline <- NA
+            increment <- NA
           }
           else 
           {
@@ -1153,9 +1160,9 @@ server <- function(input, output, session) {
           baselines<<-c(baselines,as.numeric(baseline))
           increments<<-c(increments, as.numeric(increment))
           
-          Decimal_or_Rounded <<- c(Decimal_or_Rounded, wholeNumbersBool)
+          ###Decimal_or_Rounded <<- c(Decimal_or_Rounded, wholeNumbersBool)
           
-          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max,increment,baseline))
+          myValues$table <- rbind(isolate(myValues$table), cbind(parameter,min,max,increment,baseline, wholeNumbersBool))
           
           #Change option boxes back to default 
           updateTextInput(session, "parameter", value = "")     
@@ -1195,12 +1202,13 @@ server <- function(input, output, session) {
     if(length(myValues$table)>1)
     {
       #This is the column names for the settings file
-      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline")
+      colnames(myValues$table) <- c("Parameter","Min","Max", "Increment", "Baseline", "Decimal/Whole Number")
       
       #This part changes only what the user sees on screen and not what gets downloaded in the settings file, as there is no need to know about rounding in the settings file.
-      forUserToSee <- cbind(myValues$table, Decimal_or_Rounded)
-      colnames(forUserToSee) <- c("Parameter","Min","Max", "Increment", "Baseline", "Decimal/Whole Number")
-      forUserToSee #show the user the table
+      #forUserToSee <- cbind(myValues$table, c(Decimal_or_Rounded))
+      #colnames(forUserToSee) <- c("Parameter","Min","Max", "Increment", "Baseline", "Decimal/Whole Number")
+      myValues$table
+      #forUserToSee #show the user the table
     }
     
   })
