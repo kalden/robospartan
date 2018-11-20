@@ -13,9 +13,9 @@ library(spartan)
 library(DBI)
 library(RMySQL)
 library(readr) #Required for wrtie_csv on MacOS
-library(spartanDB)
+#library(spartanDB)
 
-source("/home/fgch500/robospartan/modify_argos_xml.R")
+source("modify_argos_xml.R")
 parameters<-c()
 mins<-c()
 maxs<-c()
@@ -319,8 +319,8 @@ server <- function(input, output, session) {
     },
     content = function(file) { 
       print(columnNames)
-      colnames(resultReplicas) <- columnNames
-      write_csv(data.frame(resultReplicas), path = file) 
+      colnames(result) <- columnNames
+      write_csv(data.frame(result), path = file) 
       }
   )
   
@@ -468,17 +468,18 @@ server <- function(input, output, session) {
               result [ ,i] <<- round(result[ ,i])
             }
           }
-          for (lines in 1:input$numSamples)
-          {
-            for (replicas in 1:input$numExecutions)
-            {
-              resultReplicas <<- rbind(resultReplicas, result[lines, ])
-            }
-          }
+          #for (lines in 1:input$numSamples)
+          #{
+            #for (replicas in 1:input$numExecutions)
+            #{
+              #resultReplicas <<- rbind(resultReplicas, result[lines, ])
+              
+            #}
+          #}
          
           output$sample_header <- renderUI({ h4("Generated Sample:") })
           output$sample <- DT::renderDataTable(
-            DT::datatable(data = resultReplicas, 
+            DT::datatable(data = result, 
                           options = list(pageLength = 10, searching=FALSE), 
                           rownames = FALSE, colnames = columnNames))
           
@@ -513,17 +514,17 @@ server <- function(input, output, session) {
               showModal(modalDialog(
                 title = "Generating data table",
                 "Data table is currently being generated"))
-              for (lines in 1:nrow(result))
-              {
-                for (replicas in 1:input$numExecutions)
-                {
-                  resultReplicas <<- rbind(resultReplicas, result[lines,  ])
-                }
-              }
+              #for (lines in 1:nrow(result))
+              #{
+              #  for (replicas in 1:input$numExecutions)
+              #  {
+              #    resultReplicas <<- rbind(resultReplicas, result[lines,  ])
+              #  }
+              #}
               columnNames <<- c(parameters, "Parameter of Interest", "Curve")
               output$sample_header <- renderUI({ h4("Generated Sample:") })
               output$sample <- DT::renderDataTable(
-                DT::datatable(data = resultReplicas,
+                DT::datatable(data = result,
                               options = list(pageLength = 10, searching=FALSE),
                               rownames = FALSE, colnames = columnNames))
               showModal(modalDialog(
@@ -560,17 +561,17 @@ server <- function(input, output, session) {
             result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
           }
           print(nrow(result))
-          for (lines in 1:nrow(result))
-          {
-            for (replicas in 1:input$numExecutions)
-            {
-              resultReplicas <<- rbind(resultReplicas, result[lines, ])
-            }
-          }
+          #for (lines in 1:nrow(result))
+          #{
+          #  for (replicas in 1:input$numExecutions)
+          #  {
+          #    resultReplicas <<- rbind(resultReplicas, result[lines, ])
+          #  }
+          #}
           columnNames <<- c(parameters, "Parameter of Interest")
           output$sample_header <- renderUI({ h4("Generated Sample:") })
           output$sample <- DT::renderDataTable(
-            DT::datatable(data = resultReplicas,
+            DT::datatable(data = result,
                           options = list(pageLength = 10, searching=FALSE),
                           rownames = FALSE, colnames = columnNames))
           complete <- TRUE
