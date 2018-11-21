@@ -13,19 +13,8 @@ library(spartan)
 library(readr) #Required for wrtie_csv on MacOS
 #library(spartanDB)
 
-source("modify_argos_xml.R")
-parameters<-c()
-mins<-c()
-maxs<-c()
-baselines<-c()
-increments<-c()
-curves<-c()
-directory <- ""
-measures <- c()
-columnNames <<- c("Measures")
-wholeNumbers <- c()
-Decimal_or_Rounded <- c()
-resultReplicas <- c()
+# Attributes moved from here to server, as these were common across all users of the app
+
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
@@ -221,10 +210,27 @@ ui <- fluidPage(
 # Define server logic 
 server <- function(input, output, session) {
   
-  measureCounter <- 1
+  source("modify_argos_xml.R", local=TRUE)
+  
+  # Attributes now within server function
+  
   measureValues <- reactiveValues()
   myValues <- reactiveValues()
   myValues$sampleGenerated<-FALSE
+  myValues$parameters <- c()
+  myValues$measures <- c()
+  myValues$mins<-c()
+  myValues$maxs<-c()
+  myValues$baselines<-c()
+  myValues$increments<-c()
+  #myValues$curves<-c()
+  #myValues$directory <- ""
+  myValues$columnNames <- c("Measures")
+  myValues$wholeNumbers <- c()
+  myValues$Decimal_or_Rounded <- c()
+  #myValues$resultReplicas <- c()
+  myValues$measureCounter <- 1
+  
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
   #shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
   shinyjs::hide("argosFiles")
@@ -244,9 +250,7 @@ server <- function(input, output, session) {
   #shinyjs::hideElement("main")
   shinyjs::hide("settingFile")
   shinyjs::hide("wholeNumber")
-  sampleCreated <<- FALSE #Flag to determine whether a sample has been created
-  
-  measures <- c()
+  sampleCreated <- FALSE #Flag to determine whether a sample has been created
   
   rv <- reactiveValues(download_flag = 0)
   
@@ -297,30 +301,32 @@ server <- function(input, output, session) {
   
   observeEvent(input$addMeasure,
                {
+                
+                 print(myValues$parameters)
                  if (input$measures != ""){
-                   measures <- c(measures, input$measures)
-                   print(measures)
+                   myValues$measures <- c(myValues$measures, input$measures)
+                   print(myValues$measures)
                    updateTextInput(session, inputId = "measures", value = "")
-                   measureValues$table <- rbind(c("Measures:", measures))
-                   columnNames <<- c(columnNames, paste0("Measure ", measureCounter))
+                   measureValues$table <- rbind(c("Measures:", myValues$measures))
+                   myValues$columnNames <- c(myValues$columnNames, paste0("Measure ", myValues$measureCounter))
                    ## KA: ERROR OCCURRING IN LINE 307
-                   colnames(measureValues$table) <- columnNames
+                   colnames(measureValues$table) <- myValues$columnNames
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
                    shinyjs::enable("clearMeasures")
-                   measureCounter <<- measureCounter + 1
-                   print (measureCounter)
+                   myValues$measureCounter <- myValues$measureCounter + 1
+                   print (myValues$measureCounter)
                  }
                })
   
   observeEvent(input$clearMeasures,
                {
-                 measures <- c()
+                 myValues$measures <- c()
                  updateTextInput(session, inputId = "measures", value = "")
                  shinyjs::disable("clearMeasures")
                  output$measures_table <-  NULL
                  measureValues$table
-                 columnNames <- c("Measures")
-                 measureCounter <<- 1
+                 myValues$columnNames <- c("Measures")
+                 myValues$measureCounter <- 1
                  
                })
   
@@ -331,8 +337,8 @@ server <- function(input, output, session) {
       paste0(input$analysisType,"Data.csv")
     },
     content = function(file) { 
-      print(columnNames)
-      colnames(result) <- columnNames
+      print(myValues$columnNames)
+      colnames(result) <- myValues$columnNames
       write_csv(data.frame(result), path = file) 
       }
   )
@@ -438,8 +444,12 @@ server <- function(input, output, session) {
     },
     content = function(file) { 
       
-      if(!file.exists(file.path(getwd(),"argosFiles")))
-        dir.create(file.path(getwd(),"argosFiles"))
+      # We're going to have a specific directory named with the date and time, incase of multiple users
+      argos_files_directory<-file.path(getwd(),paste0("argosFiles_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
+      
+      
+      if(!argos_files_directory)
+        dir.create(argos_files_directory)
       
       #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
       #dir.create(file.path(input$argosDirectory, "experiments"))
@@ -456,21 +466,21 @@ server <- function(input, output, session) {
       #  title = "Creating ARGoS Files",
       #  "ARGoS files are being created..."))
       #print(input$numExecutions)
-      make_argos_file_from_sample(input$argosFiles$datapath, file.path(getwd(),"argosFiles"), parameters, result)
+      make_argos_file_from_sample(input$argosFiles$datapath, argos_files_directory, myValues$parameters, result)
       
       #current_wd<-getwd()
       #setwd(directory)
-      zip(zipfile = file, dir(file.path(getwd(),"argosFiles"), full.names = TRUE), flags="-qjr")
+      zip(zipfile = file, dir(argos_files_directory, full.names = TRUE), flags="-qjr")
       #showModal(modalDialog(
       #  title = "Zip File Created",
       #  "A Zip file of ARGoS files has been created at:       ", file))
       
       for(s in 1:nrow(myValues$sample)) #Remove all XML files once they've been zipped
       {
-        file.remove(file.path(getwd(),"argosFiles", paste0("argos_experiment_set_",s,".argos")))
+        file.remove(file.path(argos_files_directory, paste0("argos_experiment_set_",s,".argos")))
       }
       # Remove the generated directory
-      unlink(file.path(getwd(),"argosFiles"),recursive=TRUE, force=TRUE)
+      unlink(argos_files_directory,recursive=TRUE, force=TRUE)
       
       # Change the wd back
       #setwd(current_wd)
@@ -519,26 +529,26 @@ server <- function(input, output, session) {
   #### Action when Create Sample is pressed
   observeEvent(input$createSample,
     {
-      complete <<- FALSE
-      if (length(measures) > 0)
+      complete <- FALSE
+      if (length(myValues$measures) > 0)
       {
-        result <<- NULL
-        sampleCreated <<- TRUE
+        result <- NULL
+        sampleCreated <- TRUE
         #measures <<- c("Velocity", "Displacement")
         shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
         shinyjs::show("settingFile")
         
         if(input$analysisType == "Latin-Hypercube" && is.integer(input$numSamples)) 
         {
-          myValues$sample <<- lhc_generate_lhc_sample(FILEPATH=NULL, parameters, input$numSamples, mins, maxs, input$algorithm)
-          myValues$sampleGenerated<<-TRUE
-          columnNames <<- c(parameters)
-          result<<-myValues$sample #required when the user wishes to download the analysis
-          if (length(wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
+          myValues$sample <- lhc_generate_lhc_sample(FILEPATH=NULL, myValues$parameters, input$numSamples, myValues$mins, myValues$maxs, input$algorithm)
+          myValues$sampleGenerated<-TRUE
+          myValues$columnNames <- c(myValues$parameters)
+          result<-myValues$sample #required when the user wishes to download the analysis
+          if (length(myValues$wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
           {
-            for (i in wholeNumbers)
+            for (i in myValues$wholeNumbers)
             {
-              result [ ,i] <<- round(result[ ,i])
+              result [ ,i] <- round(result[ ,i])
             }
           }
           #for (lines in 1:input$numSamples)
@@ -554,34 +564,34 @@ server <- function(input, output, session) {
           output$sample <- DT::renderDataTable(
             DT::datatable(data = result, 
                           options = list(pageLength = 10, searching=FALSE), 
-                          rownames = FALSE, colnames = columnNames))
+                          rownames = FALSE, colnames = myValues$columnNames))
           
           complete <- TRUE
         }
         
         else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
         {
-          if (length(parameters) > 1)
+          if (length(myValues$parameters) > 1)
           {
             if (input$numSamples >= 65)
             {
               
               #Adding the dummy parameter
-              parameters <- c(parameters, "Dummy")
-              mins <- c(mins, 0)
-              maxs <- c(maxs, 1)
+              myValues$parameters <- c(myValues$parameters, "Dummy")
+              myValues$mins <- c(myValues$mins, 0)
+              myValues$maxs <- c(myValues$maxs, 1)
               print("here")
-              myValues$sample <<- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, parameters, mins, maxs, write_csv = FALSE, return_sample = TRUE)
-              myValues$sampleGenerated<<-TRUE
+              myValues$sample <- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, myValues$parameters, myValues$mins, myValues$maxs, write_csv = FALSE, return_sample = TRUE)
+              myValues$sampleGenerated<-TRUE
               print("now here")
               print("eFAST can work")
-              for(param in 1:length(parameters)) #iterate through each parameter chosen
+              for(param in 1:length(myValues$parameters)) #iterate through each parameter chosen
               {
                 for(c in 1:input$numCurves) #iterate for the number of curves chosen
                 {
-                  myValues$sample[ , wholeNumbers,param,c] <<- round(myValues$sample[,wholeNumbers, param, c ])
+                  myValues$sample[ , myValues$wholeNumbers,param,c] <- round(myValues$sample[,myValues$wholeNumbers, param, c ])
 
-                  result <<- rbind(result, cbind(myValues$sample[,  , param,c], parameters[param], c))
+                  result <- rbind(result, cbind(myValues$sample[,  , param,c], myValues$parameters[param], c))
                 }
               }
               showModal(modalDialog(
@@ -594,12 +604,12 @@ server <- function(input, output, session) {
               #    resultReplicas <<- rbind(resultReplicas, result[lines,  ])
               #  }
               #}
-              columnNames <<- c(parameters, "Parameter of Interest", "Curve")
+              myValues$columnNames <- c(myValues$parameters, "Parameter of Interest", "Curve")
               output$sample_header <- renderUI({ h4("Generated Sample:") })
               output$sample <- DT::renderDataTable(
                 DT::datatable(data = result,
                               options = list(pageLength = 10, searching=FALSE),
-                              rownames = FALSE, colnames = columnNames))
+                              rownames = FALSE, colnames = myValues$columnNames))
               showModal(modalDialog(
                 title = "Data table generated",
                 "Data table has been generated"))
@@ -627,11 +637,11 @@ server <- function(input, output, session) {
         
         else if(input$analysisType == "Robustness")
         {
-          myValues$sample <<- oat_parameter_sampling(FILEPATH = NULL, parameters, baselines, mins, maxs, increments, write_csv = FALSE, return_sample = TRUE)
-          myValues$sampleGenerated<<-TRUE
+          myValues$sample <- oat_parameter_sampling(FILEPATH = NULL, myValues$parameters, myValues$baselines, myValues$mins, myValues$maxs, myValues$increments, write_csv = FALSE, return_sample = TRUE)
+          myValues$sampleGenerated<-TRUE
           for(param in 1:length(myValues$sample))
           {
-            result <<- rbind(result, cbind(myValues$sample[[param]], parameters[param]))
+            result <- rbind(result, cbind(myValues$sample[[param]], myValues$parameters[param]))
           }
           print(nrow(result))
           #for (lines in 1:nrow(result))
@@ -641,12 +651,12 @@ server <- function(input, output, session) {
           #    resultReplicas <<- rbind(resultReplicas, result[lines, ])
           #  }
           #}
-          columnNames <<- c(parameters, "Parameter of Interest")
+          myValues$columnNames <- c(myValues$parameters, "Parameter of Interest")
           output$sample_header <- renderUI({ h4("Generated Sample:") })
           output$sample <- DT::renderDataTable(
             DT::datatable(data = result,
                           options = list(pageLength = 10, searching=FALSE),
-                          rownames = FALSE, colnames = columnNames))
+                          rownames = FALSE, colnames = myValues$columnNames))
           complete <- TRUE
           
         }  
@@ -683,7 +693,7 @@ server <- function(input, output, session) {
     {
       rmysql.settingsfile<-input$DBSettings$datapath #Use the user's selected datapath
       rmysql.db<-"spartan_ppsim"
-      dblink<<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
+      dblink<-dbConnect(MySQL(),default.file=rmysql.settingsfile,group=rmysql.db)
       shinyjs::show("addToDB")
       shinyjs::show("createDB")
     })
@@ -697,12 +707,15 @@ server <- function(input, output, session) {
     },
     content = function(file) { 
   
-      if(!file.exists(file.path(getwd(),"cluster_scripts")))
-        dir.create(file.path(getwd(),"cluster_scripts"))
+      # We're going to have a specific directory named with the date and time, incase of multiple users
+      cluster_script_directory<-file.path(getwd(),paste0("cluster_scripts_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
+      
+      if(!file.exists(cluster_script_directory))
+        dir.create(cluster_script_directory)
       
       
       # Creates the scripts in the current directory, zips these two up, then offers for download
-      sink(file.path(getwd(),"cluster_scripts",paste0(input$analysisType, "_cluster_argos.sh")))
+      sink(file.path(cluster_script_directory,paste0(input$analysisType, "_cluster_argos.sh")))
       
       # KA: Incorporated variables script into this one, to save the need for two scripts
       cat("#!/bin/bash","\n")
@@ -804,7 +817,7 @@ server <- function(input, output, session) {
       sink()
       
       # Creates the scripts in the current directory, zips these two up, then offers for download
-      sink(file.path(getwd(),"cluster_scripts","processDataAndCombineResults.sh"))
+      sink(file.path(cluster_script_directory,"processDataAndCombineResults.sh"))
       
       cat("#!/bin/bash","\n")
       cat("","\n")
@@ -959,11 +972,11 @@ server <- function(input, output, session) {
       cat("","\n")
       sink()
       
-      zip(zipfile = file, dir(file.path(getwd(),"cluster_scripts"), full.names = TRUE), flags="-qjr")
+      zip(zipfile = file, dir(cluster_script_directory, full.names = TRUE), flags="-qjr")
       
-      file.remove(file.path(getwd(),"cluster_scripts","processDataAndCombineResults.sh"))
-      file.remove(file.path(getwd(),"cluster_scripts",paste0(input$analysisType, "_cluster_argos.sh")))
-      unlink(file.path(getwd(),"cluster_scripts"),recursive=TRUE,force=TRUE)
+      file.remove(file.path(cluster_script_directory,"processDataAndCombineResults.sh"))
+      file.remove(file.path(cluster_script_directory,paste0(input$analysisType, "_cluster_argos.sh")))
+      unlink(cluster_script_directory,recursive=TRUE,force=TRUE)
     }
   )
   
@@ -1038,12 +1051,12 @@ server <- function(input, output, session) {
           
           else if(input$analysisType == "eFAST" && is.integer(input$numSamples))
           {
-            add_existing_efast_sample_to_database(dblink, parameters, input$numCurves, parameters_r_object=myValues$sample, experiment_description="Original PPSim eFAST")
+            add_existing_efast_sample_to_database(dblink, myValues$parameters, input$numCurves, parameters_r_object=myValues$sample, experiment_description="Original PPSim eFAST")
           }
           
           else if(input$analysisType == "Robustness")
           {
-            add_existing_robustness_sample_to_database(dblink, parameters, parameters_r_object=myValues$sample, experiment_description="Original PPSim Robustness")
+            add_existing_robustness_sample_to_database(dblink, myValues$parameters, parameters_r_object=myValues$sample, experiment_description="Original PPSim Robustness")
           
           }  
         }
@@ -1066,25 +1079,25 @@ server <- function(input, output, session) {
   )
   
   observeEvent(input$createDB, 
-               create_database_structure(dblink, parameters, measures)) #Allow the user to create a database based on their parameters 
+               create_database_structure(dblink, myValues$parameters, myValues$measures)) #Allow the user to create a database based on their parameters 
   observeEvent(input$deleteDB, delete_database_structure(dblink)) #Allows the user to delete database structure
   
   #### Action when Clear Parameter is pressed
   observeEvent(
     input$clearParameter,
     {
-      Decimal_or_Rounded <<- c()
+      myValues$Decimal_or_Rounded <- c()
       shinyjs::hideElement("main")
       shinyjs::hide("createSample") #Make it so the create sample is once again hidden from the user
       shinyjs::hide("createARGosFiles")
       shinyjs::disable("createARGoSFiles") 
-      sampleCreated <<- FALSE
-      parameters<<-c()
-      mins<<-c()
-      maxs<<-c()
-      increments<<-c()
-      baselines<<-c()
-      wholeNumbers <<- c()
+      sampleCreated <- FALSE
+      myValues$parameters<-c()
+      myValues$mins<-c()
+      myValues$maxs<-c()
+      myValues$increments<-c()
+      myValues$baselines<-c()
+      myValues$wholeNumbers <- c()
       myValues$sampleGenerated<-FALSE
     
       myValues$table<-NULL
@@ -1115,12 +1128,12 @@ server <- function(input, output, session) {
     shinyjs::showElement("main")
     if(input$addParameter > 0){
       inputTest <- list(input$min, input$max)
-      positiveNumber <<- TRUE
+      positiveNumber <- TRUE
       for(positiveTest in 1:length(inputTest)) #checking the min and max values are positive numbers
       { 
         if (inputTest[positiveTest] < 0)
         {  
-          positiveNumber <<- FALSE  
+          positiveNumber <- FALSE  
         } 
       }
       if(input$parameter != "" && is.numeric(input$min) && is.numeric(input$max) && positiveNumber == TRUE)
@@ -1131,16 +1144,16 @@ server <- function(input, output, session) {
           min<-isolate(input$min)
           max<-isolate(input$max)
           
-          parameters<<-c(parameters,parameter)
+          myValues$parameters<-c(myValues$parameters,parameter)
           
           if (input$wholeNumber == TRUE)
           {
-            wholeNumbers <<- c(wholeNumbers, length(parameters))
-            wholeNumbersBool <<- "Whole Number"
+            myValues$wholeNumbers <- c(myValues$wholeNumbers, length(myValues$parameters))
+            wholeNumbersBool <- "Whole Number"
           }
           else 
           {
-            wholeNumbersBool <<- "Decimal"  
+            wholeNumbersBool <- "Decimal"  
           }
 
           if (input$analysisType != "Robustness")
@@ -1152,13 +1165,13 @@ server <- function(input, output, session) {
           {
             baseline <- isolate(input$baseline)
             increment <- isolate(input$robustnessIncrement)
-            wholeNumbersBool <<- "N/A"
+            wholeNumbersBool <- "N/A"
           }
           
-          mins<<-c(mins,as.numeric(min))
-          maxs<<-c(maxs,as.numeric(max))
-          baselines<<-c(baselines,as.numeric(baseline))
-          increments<<-c(increments, as.numeric(increment))
+          myValues$mins<-c(myValues$mins,as.numeric(min))
+          myValues$maxs<-c(myValues$maxs,as.numeric(max))
+          myValues$baselines<-c(myValues$baselines,as.numeric(baseline))
+          myValues$increments<-c(myValues$increments, as.numeric(increment))
           
           ###Decimal_or_Rounded <<- c(Decimal_or_Rounded, wholeNumbersBool)
           
