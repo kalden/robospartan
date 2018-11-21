@@ -230,6 +230,7 @@ server <- function(input, output, session) {
   myValues$Decimal_or_Rounded <- c()
   #myValues$resultReplicas <- c()
   myValues$measureCounter <- 1
+  myValues$displayed_result<-NULL
   
   shinyjs::hide("createSample") #initialise the button to be hidden until parameters are added
   #shinyjs::disable("createARGoSFiles")#Hide the ability to create an argos file until the user has created their sample
@@ -302,19 +303,17 @@ server <- function(input, output, session) {
   observeEvent(input$addMeasure,
                {
                 
-                 print(myValues$parameters)
+            
                  if (input$measures != ""){
                    myValues$measures <- c(myValues$measures, input$measures)
-                   print(myValues$measures)
                    updateTextInput(session, inputId = "measures", value = "")
                    measureValues$table <- rbind(c("Measures:", myValues$measures))
                    myValues$columnNames <- c(myValues$columnNames, paste0("Measure ", myValues$measureCounter))
-                   ## KA: ERROR OCCURRING IN LINE 307
                    colnames(measureValues$table) <- myValues$columnNames
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
                    shinyjs::enable("clearMeasures")
                    myValues$measureCounter <- myValues$measureCounter + 1
-                   print (myValues$measureCounter)
+                   
                  }
                })
   
@@ -337,9 +336,8 @@ server <- function(input, output, session) {
       paste0(input$analysisType,"Data.csv")
     },
     content = function(file) { 
-      print(myValues$columnNames)
-      colnames(result) <- myValues$columnNames
-      write_csv(data.frame(result), path = file) 
+      colnames(myValues$displayed_result) <- myValues$columnNames
+      write_csv(data.frame(myValues$displayed_result), path = file) 
       }
   )
   
@@ -448,7 +446,7 @@ server <- function(input, output, session) {
       argos_files_directory<-file.path(getwd(),paste0("argosFiles_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
       
       
-      if(!argos_files_directory)
+      if(!file.exists(argos_files_directory))
         dir.create(argos_files_directory)
       
       #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
@@ -466,7 +464,8 @@ server <- function(input, output, session) {
       #  title = "Creating ARGoS Files",
       #  "ARGoS files are being created..."))
       #print(input$numExecutions)
-      make_argos_file_from_sample(input$argosFiles$datapath, argos_files_directory, myValues$parameters, result)
+      #print(argos_files_directory)
+      make_argos_file_from_sample(input$argosFiles$datapath, argos_files_directory, myValues$parameters, myValues$displayed_result)
       
       #current_wd<-getwd()
       #setwd(directory)
@@ -532,7 +531,7 @@ server <- function(input, output, session) {
       complete <- FALSE
       if (length(myValues$measures) > 0)
       {
-        result <- NULL
+        myValues$displayed_result
         sampleCreated <- TRUE
         #measures <<- c("Velocity", "Displacement")
         shinyjs::enable("createARGoSFiles") #allow the user to create argos files using the sample results 
@@ -543,12 +542,12 @@ server <- function(input, output, session) {
           myValues$sample <- lhc_generate_lhc_sample(FILEPATH=NULL, myValues$parameters, input$numSamples, myValues$mins, myValues$maxs, input$algorithm)
           myValues$sampleGenerated<-TRUE
           myValues$columnNames <- c(myValues$parameters)
-          result<-myValues$sample #required when the user wishes to download the analysis
+          myValues$displayed_result<-myValues$sample #required when the user wishes to download the analysis
           if (length(myValues$wholeNumbers > 0)) #if the user has wanted any of their parameters to be set to being rounded to whole numbers
           {
             for (i in myValues$wholeNumbers)
             {
-              result [ ,i] <- round(result[ ,i])
+              myValues$displayed_result [ ,i] <- round(myValues$displayed_result[ ,i])
             }
           }
           #for (lines in 1:input$numSamples)
@@ -562,7 +561,7 @@ server <- function(input, output, session) {
          
           output$sample_header <- renderUI({ h4("Generated Sample:") })
           output$sample <- DT::renderDataTable(
-            DT::datatable(data = result, 
+            DT::datatable(data = myValues$displayed_result, 
                           options = list(pageLength = 10, searching=FALSE), 
                           rownames = FALSE, colnames = myValues$columnNames))
           
@@ -580,18 +579,17 @@ server <- function(input, output, session) {
               myValues$parameters <- c(myValues$parameters, "Dummy")
               myValues$mins <- c(myValues$mins, 0)
               myValues$maxs <- c(myValues$maxs, 1)
-              print("here")
+              
               myValues$sample <- efast_generate_sample(FILEPATH = NULL, input$numCurves, input$numSamples, myValues$parameters, myValues$mins, myValues$maxs, write_csv = FALSE, return_sample = TRUE)
               myValues$sampleGenerated<-TRUE
-              print("now here")
-              print("eFAST can work")
+              
               for(param in 1:length(myValues$parameters)) #iterate through each parameter chosen
               {
                 for(c in 1:input$numCurves) #iterate for the number of curves chosen
                 {
                   myValues$sample[ , myValues$wholeNumbers,param,c] <- round(myValues$sample[,myValues$wholeNumbers, param, c ])
 
-                  result <- rbind(result, cbind(myValues$sample[,  , param,c], myValues$parameters[param], c))
+                  myValues$displayed_result <- rbind(myValues$displayed_result, cbind(myValues$sample[,  , param,c], myValues$parameters[param], c))
                 }
               }
               showModal(modalDialog(
@@ -607,7 +605,7 @@ server <- function(input, output, session) {
               myValues$columnNames <- c(myValues$parameters, "Parameter of Interest", "Curve")
               output$sample_header <- renderUI({ h4("Generated Sample:") })
               output$sample <- DT::renderDataTable(
-                DT::datatable(data = result,
+                DT::datatable(data = myValues$displayed_result,
                               options = list(pageLength = 10, searching=FALSE),
                               rownames = FALSE, colnames = myValues$columnNames))
               showModal(modalDialog(
@@ -641,9 +639,9 @@ server <- function(input, output, session) {
           myValues$sampleGenerated<-TRUE
           for(param in 1:length(myValues$sample))
           {
-            result <- rbind(result, cbind(myValues$sample[[param]], myValues$parameters[param]))
+            myValues$displayed_result <- rbind(myValues$displayed_result, cbind(myValues$sample[[param]], myValues$parameters[param]))
           }
-          print(nrow(result))
+          
           #for (lines in 1:nrow(result))
           #{
           #  for (replicas in 1:input$numExecutions)
@@ -654,7 +652,7 @@ server <- function(input, output, session) {
           myValues$columnNames <- c(myValues$parameters, "Parameter of Interest")
           output$sample_header <- renderUI({ h4("Generated Sample:") })
           output$sample <- DT::renderDataTable(
-            DT::datatable(data = result,
+            DT::datatable(data = myValues$displayed_result,
                           options = list(pageLength = 10, searching=FALSE),
                           rownames = FALSE, colnames = myValues$columnNames))
           complete <- TRUE
