@@ -73,52 +73,52 @@ ui <- fluidPage(
                   actionButton(inputId = "clearMeasureScales", label = "Clear All Measure Scales")
                   
         ),
-        wellPanel(id = "fileNamesForFunc",
-                  textInput(inputId = "ATestFileName", label = "Type a Desired Name for A-Test Results (NO EXTENSION)", value = "ATest_Results", width = '100%', placeholder = ".csv"),
-                  textInput(inputId = "eFASTResultsFileName", label = "Type a Desired Name for eFAST Results (NO EXTENSION)", value = "EFAST_Results", width = '100%', placeholder = ".csv"),
-                  textInput(inputId = "corCoeffsFileName", label = "Type a Desired Name for Coefficients Results (With .csv extension)", value = "LHC_corCoeffs.csv", width = '100%', placeholder = ".csv")),
+        #wellPanel(id = "fileNamesForFunc",
+        #          textInput(inputId = "ATestFileName", label = "Type a Desired Name for A-Test Results (NO EXTENSION)", value = "ATest_Results", width = '100%', placeholder = ".csv"),
+        #          textInput(inputId = "eFASTResultsFileName", label = "Type a Desired Name for eFAST Results (NO EXTENSION)", value = "EFAST_Results", width = '100%', placeholder = ".csv"),
+        #          textInput(inputId = "corCoeffsFileName", label = "Type a Desired Name for Coefficients Results (With .csv extension)", value = "LHC_corCoeffs.csv", width = '100%', placeholder = ".csv")),
       
         wellPanel(id = "Extras",
-                  h4("Extra Variables:"),
+                  h4("Analysis Specific Variables:"),
                   numericInput(inputId = "aTestSig", label = "A-Test Signal Level:", value = 0.23, step = 0.01, min = 0),
                   numericInput(inputId = "ttest_conf", label = "T-Test Confidence Interval:", value = 0.95, step = 0.01, max = 1.00, min = 0)),
         
         wellPanel(id = "eFASTNotice",
                   h5("If eFAST Results are already in a split csv file format then you are required to input the zip file containing them here. If files not sorted and you have just generated an all results and parameters file, then input this below")),
        
-         wellPanel(id = "filesWell",
-           h4("File Declarations:"),
+         #wellPanel(id = "filesWell",
+        #   h4("File Declarations:"),
 
-            fileInput(inputId = "AllResults",
-                      label = "All Simulation Results File"),
+            #fileInput(inputId = "AllResults",
+            #          label = "All Simulation Results File"),
            
-            fileInput(inputId = "eFASTAllResults",
-                      label = "eFAST Results Input")
+            #fileInput(inputId = "eFASTAllResults",
+            #          label = "eFAST Results Input")
            
-         ),
+         #),
          
          
          wellPanel(id = "lastWell",
            h4(uiOutput("firstChoice")),
            
            actionButton(inputId = "LHSSummary",
-                        label = "Go"),
-           hr(),
+                        label = "Go")
+           #hr(),
          
-           h4(uiOutput("textChange")),
+           #h4(uiOutput("textChange")),
            
-           actionButton(inputId = "LHSGenerate",
-                        label = "Go"),
+           #actionButton(inputId = "LHSGenerate",
+          #              label = "Go"),
 
-           hr(),
+           #hr(),
            
-           h4("Generate Graphs"),
+           #h4("Generate Graphs"),
            
-           actionButton(inputId = "GraphButton",
-                        label = "Generate"),
+           #actionButton(inputId = "GraphButton",
+          #              label = "Generate"),
            
-           actionButton(inputId = "showGraphs", 
-                        label = "Show Graphs")
+          # actionButton(inputId = "showGraphs", 
+           #             label = "Show Graphs")
 
          ),
         
@@ -140,8 +140,11 @@ ui <- fluidPage(
         #                   imageOutput(outputId = "Graph"))
         tags$style("#dispGraph {border: 3px solid #0000FF; font-weight: bold;}"),
         actionButton(inputId = "dispGraph", "Display this Graph"),
-        tags$style("#zipGraphs {border: 3px solid #FF8C00; font-weight: bold;}"),
-        actionButton(inputId = "zipGraphs", label = "Download all graphs to a ZIP file"),
+        tags$style("#zip_analysis {border: 3px solid #FF8C00; font-weight: bold;}"),
+        
+        downloadButton(outputId = "zip_analysis", label = "If Finished, Download Analysis in Zip File (Resets App)"),
+        
+        #actionButton(inputId = "zipGraphs", label = "Download all graphs to a ZIP file"),
         imageOutput(outputId = "Graph"),
         
 
@@ -151,6 +154,8 @@ ui <- fluidPage(
 
 # Define server logic required to draw ah histogram
 server <- function(input, output, session) {
+  
+  jsResetCode <- "shinyjs.reset = function() {history.go(0)}" # Define the js method that resets the page
   
   # Attributes that Finlay previously put above have been moved here, in a reactive variable
   analysis_attrs<-reactiveValues()
@@ -181,6 +186,14 @@ server <- function(input, output, session) {
   analysis_attrs$graphs <- c()
   analysis_attrs$disableCounter <- 0
   #analysis_attrs$replicas <- 30
+  analysis_attrs$ATestFileName <- "ATest_Results.csv"
+  analysis_attrs$eFASTResultsFileName <- "eFAST_Analysis_Results.csv"
+  analysis_attrs$corCoeffsFileName <- "LHC_Correlation_Coefficients.csv"
+
+  # We're going to have a specific directory named with the date and time, incase of multiple users
+  analysis_attrs$user_dir <- file.path(getwd(),paste0("rs_analysis_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
+  # Also stored as non-reactive so can delete at the end of the session
+  user_dir<-file.path(getwd(),paste0("rs_analysis_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
   
   analysis_attrs$measureScaleCounter <- 1
   myValues <- reactiveValues()
@@ -208,7 +221,7 @@ server <- function(input, output, session) {
   shinyjs::hide("selectUI")
   shinyjs::hide("changingMeasures")
   shinyjs::hide("dispGraph")
-  shinyjs::hide("zipGraphs")
+  shinyjs::hide("zip_analysis")
   shinyjs::hideElement("lastWell")
   shinyjs::hide("AllResults")
   shinyjs::hide("eFASTAllResults")
@@ -299,6 +312,23 @@ server <- function(input, output, session) {
                  
                })
   
+  output$zip_analysis <- downloadHandler(
+    filename = function() {
+      paste0("rs_analysis_",gsub(" ","_",gsub(":","_",toString(Sys.time()))),".zip")
+    },
+    content = function(file) { 
+      
+      showModal(modalDialog(
+        title = "Analysis Complete",
+        HTML("Analysis Results Downloaded in ZIP file <br> Results will be automatically deleted from the server at the end of this session")))
+      
+      zip(zipfile = file, dir(analysis_attrs$user_dir, full.names = TRUE), flags="-qjr")
+      
+     
+      
+    })
+      
+  
   observeEvent(input$zipGraphs,
           {
             if (input$usersAnalysisType == "Latin-Hypercube")
@@ -337,6 +367,8 @@ server <- function(input, output, session) {
               }
               
             }
+            
+            
             
             zip(zipfile = paste0(filePathRequired, "/", zipName), files = analysis_attrs$graphs)
           })
@@ -403,42 +435,114 @@ server <- function(input, output, session) {
   
   observeEvent(input$filePaths,
                {
-                 if(input$filePaths != ""){
+                 #if(input$filePaths != ""){
                    #ensuring the file exists and the user hasn't placed a '/' character at the end
-                   if(file.exists(input$filePaths) && substr(input$filePaths, nchar(input$filePaths), nchar(input$filePaths)) != "/")
-                   {
-                     analysis_attrs$fileName <- TRUE
-                     shinyjs::hide("filePathFalse")
-                     shinyjs::show("filePathTrue")
+                  # if(file.exists(input$filePaths) && substr(input$filePaths, nchar(input$filePaths), nchar(input$filePaths)) != "/")
+                  # {
+                    #print(head(read.csv(input$filePaths$datapath,header=T)))
+                 
+                     #analysis_attrs$fileName <- TRUE
+                     #shinyjs::hide("filePathFalse")
+                     #shinyjs::show("filePathTrue")
+                 
+          
+                 
+                    
+                 
                      switch(input$usersAnalysisType, "Latin-Hypercube" = analysis_attrs$LHCFilePathFull <- input$filePaths,
                                                      "Robustness" = analysis_attrs$robustFilePathFull <- input$filePaths,
                                                      "eFAST" = analysis_attrs$eFASTFilePath <- input$filePaths)
+                 
+                 
+                 if (input$usersAnalysisType != "eFAST") #So for LHC and Robustness
+                 {
+                   # Move the uploaded file into this sessions folder
+                   file.rename(input$filePaths$datapath, to=file.path(analysis_attrs$user_dir,"execution_results.csv"))
+                   
+                   if (input$filePaths$type == "text/csv")
+                   {
+                     shinyjs::showElement("lastWell")
+                   }
+                   else
+                   {
+                     showModal(modalDialog(
+                       title = "Wrong File Format",
+                       "This file must be a .csv file"))
+                     shinyjs::hideElement("lastWell")
+                   }
+                   
+                   #This part makes sure the settings file and results files are correct against each other before allowing the user to progress 
+                   resultsFileHeaders <- c()
+                   resultsFileCheck <- read.csv(file.path(analysis_attrs$user_dir,"execution_results.csv"), header = FALSE)
+                   for (checkerCounter in 1:(length(resultsFileCheck[1, ])))
+                   {
+                     if (toString(resultsFileCheck[1,checkerCounter]) != "Parameter.of.Interest") #Dont want this header included here
+                     {
+                       resultsFileHeaders <- c(resultsFileHeaders, gsub( " ", "", toString(resultsFileCheck[1,checkerCounter])))
+                     }
+                   }
+                   print(analysis_attrs$parameterList)
+                   settingsCombinedParamsAndMeasures <- c(analysis_attrs$measures, analysis_attrs$parameterList)
+                   #print(resultsFileHeaders)
+                   #print(settingsCombinedParamsAndMeasures)
+                   #print(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures))
+                   if (length(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures)) != length(settingsCombinedParamsAndMeasures))
+                   {
+                     print("starts here")
+                     print(intersect(resultsFileHeaders, settingsCombinedParamsAndMeasures))
+                     showModal(modalDialog(
+                       title = "Error",
+                       "Summary file and Results file's parameters and measures do not match"))
+                     shinyjs::hideElement("lastWell")
+                   }
+                 }
+                 else
+                 {
+                   #eFAST Analysis
+                   # Unzip the results file
+                   
+                   if (input$filePaths$type == "application/zip")
+                   {
+                     unzip(input$filePaths$datapath, exdir = paste0(analysis_attrs$user_dir))
+                     
+                     # Analysis should now be performed here
+                   }
+                   else
+                   {
+                     showModal(modalDialog(
+                       title = "Wrong Format",
+                       "eFAST results should be uploaded as a zip file containing one CSV file per curve-parameter result pair"))
+                   }
+                 }
+                 
+                 
+                 
                      if(input$usersAnalysisType == "Robustness")
                      {
-                       shinyjs::show("AllResults")
+                       #shinyjs::show("AllResults")
                      }
                      else if(input$usersAnalysisType == "eFAST")
                      {
-                       shinyjs::hide("AllResults")
+                       #shinyjs::hide("AllResults")
                        shinyjs::show("eFASTAllResults")
                        shinyjs::show("lastWell")
   
                      }
                      else if (input$usersAnalysisType == "Latin-Hypercube")
                      {
-                       shinyjs::show("AllResults")
+                       #shinyjs::show("AllResults")
                      }
                      
                      
-                   }
-                   else
-                   {
-                     analysis_attrs$fileName <- FALSE
-                     shinyjs::show("filePathFalse")
-                     shinyjs::hide("filePathTrue")
-                     shinyjs::hide("AllResults")
-                   }
-                 }
+                   #}
+                   #else
+                   #{
+                  #   analysis_attrs$fileName <- FALSE
+                  #   shinyjs::show("filePathFalse")
+                  #   shinyjs::hide("filePathTrue")
+                  #   shinyjs::hide("AllResults")
+                  # }
+                 #}
                })
 
   
@@ -514,13 +618,16 @@ server <- function(input, output, session) {
                {
                  if (!is.null(input$settingsFile)) #Ensure a settings file has been chosen 
                  {
+                   dir.create(analysis_attrs$user_dir)
+                   file.rename(from=input$settingsFile$datapath, to=file.path(analysis_attrs$user_dir,"analysis_settings.csv"))
+                   
                    #These first two lines ensures that the tables are reset, so if the user changing their settings file, the one and new values wont bind together. Instead only the new values will be shown.
                    myValues$table <- NULL
                    measureValues$table <- NULL
                    analysis_attrs$measures <- c()
                    i <- 10 #Measures begin at column 10
                    columnNamesMeasures <- c("Measures")
-                   settingsData <- read.csv(input$settingsFile$datapath, stringsAsFactors = FALSE)
+                   settingsData <- read.csv(file.path(analysis_attrs$user_dir,"analysis_settings.csv"), stringsAsFactors = FALSE)
                    print(settingsData)
                    analysis_attrs$parameterList <- settingsData$Parameter
                    analysis_attrs$minvals <- settingsData$Min
@@ -568,16 +675,69 @@ server <- function(input, output, session) {
                      title = "Creating Summary",
                      "Summary files are being created..."))
                    #print(input$AllResults)
-                     print(input$AllResults$name)
-                     print(analysis_attrs$LHCFilePathFull)
-                     print(analysis_attrs$lhcSummary)
+                     #print(input$AllResults$name)
+                     print(file.path(analysis_attrs$user_dir,"execution_results.csv"))
+                     #print(analysis_attrs$lhcSummary)
                      print(analysis_attrs$parameterList)
                      print(analysis_attrs$measures)
-                     summary <- lhc_generateLHCSummary(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, input$AllResults$name, analysis_attrs$lhcSummary) 
-                     showModal(modalDialog(
-                       title = "Complete",
-                       "Summary files have been created"))
-                     shinyjs::enable("LHSGenerate")
+                     
+                     # Can't put analysis_attrs$[attribute] into spartan call, as spartan complains it can't find analysis_attrs. So need a local copy
+                     params<-analysis_attrs$parameterList
+                     lhc_res_name<-"execution_results.csv"
+                     lhc_sum_dir<-"analysis_attrs$user_dir"
+                     lhc_sum_name<-analysis_attrs$lhcSummary
+                     coeffs_file_name<-analysis_attrs$corCoeffsFileName
+                     measures<-analysis_attrs$measures
+                     #print(paste0("Measure List: ",measurelist))
+                     
+                     measure_scale_loc<-analysis_attrs$measureScale
+                     print(paste("Measure Scale Loc: ",measure_scale_loc))
+                     #summary <- lhc_generateLHCSummary(dirname(analysis_attrs$filePaths$datapath), analysis_attrs$parameterList, analysis_attrs$measures, basename(analysis_attrs$filePaths$datapath), 
+                    #                                   analysis_attrs$lhcSummary) 
+                     summary <- lhc_generateLHCSummary(lhc_sum_dir,params,measures,lhc_res_name,lhc_sum_name, check_done=TRUE)
+                     
+                     # KA: Have taken Finlay's code and condensed into one button - so now calculate coefficients
+                     lhc_generatePRCoEffs(lhc_sum_dir, params, measures, lhc_sum_name, coeffs_file_name, check_done=TRUE)
+                     
+                     # Make the graphs
+                     simDataset <-read.csv(file.path(lhc_sum_dir,lhc_sum_name), header = TRUE)
+                     lister<-NULL
+                     dataRemoved<-FALSE
+                     for (i in 1:(length(simDataset[1, ])))
+                     {
+                       if(min(simDataset[i]) == max(simDataset[i]))
+                       {
+                         lister <- c(lister, colnames(simDataset[i]))
+                         dataRemoved <- TRUE
+                       }
+                     }
+                     listerString <- toString(lister)
+                     lhc_graphMeasuresForParameterChange(lhc_sum_dir, params, measures, measure_scale_loc, coeffs_file_name, lhc_sum_name, OUTPUT_TYPE = "PNG", check_done=TRUE)
+                     lhc_polarplot(lhc_sum_dir, params, measures, coeffs_file_name) 
+                     
+                     if (dataRemoved == TRUE)
+                     {
+                       showModal(modalDialog(
+                         title = "Complete",
+                         paste0("Graphs have been generated. The measure(s) ", listerString,", have not been analysed. This is due to their values all being identical.")))
+                       analysis_attrs$measures <- analysis_attrs$measures[!analysis_attrs$measures %in% lister] #Remove the non partitioned measures as these will not be included in the graph options
+                       print(analysis_attrs$measures)
+                     }
+                     else 
+                     {
+                       showModal(modalDialog(
+                         title = "Complete",
+                         "Graphs have been generated"))
+                     }
+                     
+                     
+                     
+                     
+                     
+                     #showModal(modalDialog(
+                    #   title = "Complete",
+                    #   "Summary files have been created"))
+                    # shinyjs::enable("LHSGenerate")
                   
                  }
                     
@@ -589,6 +749,14 @@ server <- function(input, output, session) {
                       title = "Creating Results",
                       "ATest result files are being created..."
                     ))
+                    
+                    # Can't put analysis_attrs$[attribute] into spartan call, as spartan complains it can't find analysis_attrs. So need a local copy
+                    params<-analysis_attrs$parameterList
+                    oat_res_name<-"execution_results.csv"
+                    oat_res_dir<-analysis_attrs$user_dir
+                    oat_a_test_sum_name<-analysis_attrs$ATestFileName
+                    measures<-analysis_attrs$measures
+                    
                     print(paste0("params:    ", analysis_attrs$parameterList))
                     print(paste0("baselines:   ", analysis_attrs$baseline))
                     print(paste0("measures:   ", analysis_attrs$measures))
@@ -596,12 +764,22 @@ server <- function(input, output, session) {
                     print(paste0("maxvals:    ", analysis_attrs$maxvals))
                     print(paste0("incvals:     ", analysis_attrs$incvals))
                     #oat_csv_result_file_analysis(filepath,  "/home/fgch500/robospartan/omegaAlgorithm/Robustness2/omegaAlgorithmRobustnesscombinedParamsAndResults.csv", parameterList, baseline, measures, paste0(robustFilePathFull, "/", input$ATestFileName, ".csv"), minvals, maxvals, incvals, PARAMVALS=NULL)
-                    oat_csv_result_file_analysis(analysis_attrs$filepath, input$AllResults$datapath , analysis_attrs$parameterList, analysis_attrs$baseline, analysis_attrs$measures, paste0(analysis_attrs$robustFilePathFull, "/", input$ATestFileName, ".csv"), analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL)
+                    oat_csv_result_file_analysis(oat_res_dir, oat_res_name , params, analysis_attrs$baseline, analysis_attrs$measures, analysis_attrs$ATestFileName, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL)
+                    
+                    oat_graphATestsForSampleSize(oat_res_dir, params, analysis_attrs$measures, input$aTestSig, analysis_attrs$ATestFileName, analysis_attrs$baseline, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL, output_types = c("png"))
+                    #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
+                    print(analysis_attrs$baseline)
+                    oat_plotResultDistribution(oat_res_dir, params, analysis_attrs$measures, analysis_attrs$measureScale, oat_res_name, analysis_attrs$baseline, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL, output_types = c("png")) 
+                    
+                    showModal(modalDialog(
+                      title = "Complete",
+                      "Graphs have been generated"))
+                    
                     showModal(modalDialog(
                       title = "Complete",
                       "ATest result files have been created"
                     ))
-                    shinyjs::enable("GraphButton")
+                    #shinyjs::enable("GraphButton")
                  }
                else if (input$usersAnalysisType == "eFAST"){
                    showModal(modalDialog(
@@ -618,21 +796,40 @@ server <- function(input, output, session) {
                    ))  
                    shinyjs::enable("GraphButton")
                }
+                 
+                 shinyjs::show("dispGraph")
+                 shinyjs::disable("filePath")
+                 shinyjs::disable("measures")
+                 shinyjs::disable("measureScale")
+                 shinyjs::show("selectUI")
+                 shinyjs::show("changingTabs")
+                 shinyjs::show("changingMeasures")
+                 shinyjs::show("zip_analysis")
+                 
+                 if (input$usersAnalysisType == "eFAST")
+                 {
+                   shinyjs::hide("selectUI") #Parameters are not required for eFAST graphs
+                 }
+                 if (input$usersAnalysisType == "Robustness")
+                 {
+                   analysis_attrs$measures<- c(analysis_attrs$measures, "A-Test Results")
+                 }
+                 updateSelectInput(session, inputId = "changingMeasures", choices = analysis_attrs$measures)
           }
                   )
   
-  observeEvent(input$LHSGenerate,
-               { 
-                 print(analysis_attrs$parameterList)
-                 print(analysis_attrs$measures)
-                 #lhcSummary <<- "LHC_Summary.csv"
-                 print(analysis_attrs$lhcSummary)
-                 lhc_generatePRCoEffs(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$lhcSummary, input$corCoeffsFileName)
-                 showModal(modalDialog(
-                   title = "Complete",
-                   "Coefficients files have been created"))
-                 shinyjs::enable("GraphButton")
-               })
+  #observeEvent(input$LHSGenerate,
+  #             { 
+  #               print(analysis_attrs$parameterList)
+  #               print(analysis_attrs$measures)
+  #               #lhcSummary <<- "LHC_Summary.csv"
+  #               print(analysis_attrs$lhcSummary)
+  #               lhc_generatePRCoEffs(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$lhcSummary, analysis_attrs$corCoeffsFileName)
+  #               showModal(modalDialog(
+  #                 title = "Complete",
+  #                 "Coefficients files have been created"))
+  #               shinyjs::enable("GraphButton")
+  #             })
   
   observeEvent(input$ifMeasureScale,
                {
@@ -708,9 +905,9 @@ server <- function(input, output, session) {
                {
                  shinyjs::show("LHSGenerate")
                  shinyjs::show("filePath")
-                 shinyjs::hide("ATestFileName")
-                 shinyjs::hide("eFASTResultsFileName")
-                 shinyjs::show("corCoeffsFileName")
+                 #shinyjs::hide("ATestFileName")
+                 #shinyjs::hide("eFASTResultsFileName")
+                 #shinyjs::show("corCoeffsFileName")
                  shinyjs::hideElement("Extras")
                  shinyjs::showElement("measuresWell")
                  shinyjs::showElement("filesWell")
@@ -742,8 +939,8 @@ server <- function(input, output, session) {
                      }
                    }
                    listerString <- toString(lister)
-                   lhc_graphMeasuresForParameterChange(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$measureScale, input$corCoeffsFileName, analysis_attrs$lhcSummary, OUTPUT_TYPE = "PNG")
-                   lhc_polarplot(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, input$corCoeffsFileName) 
+                   lhc_graphMeasuresForParameterChange(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$measureScale, analysis_attrs$corCoeffsFileName, analysis_attrs$lhcSummary, OUTPUT_TYPE = "PNG")
+                   lhc_polarplot(analysis_attrs$LHCFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$corCoeffsFileName) 
                    
                    if (dataRemoved == TRUE)
                    {
@@ -767,7 +964,7 @@ server <- function(input, output, session) {
                      title = "Generating Graphs",
                      "Graphs are being generated..."))
                    print(input$AllResults$datapath)
-                   oat_graphATestsForSampleSize(analysis_attrs$robustFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, input$aTestSig, paste0(input$ATestFileName, ".csv"), analysis_attrs$baseline, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL, output_types = c("png"))
+                   oat_graphATestsForSampleSize(analysis_attrs$robustFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, input$aTestSig, analysis_attrs$ATestFileName, analysis_attrs$baseline, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL, output_types = c("png"))
                    #oat_plotResultDistribution(robustFilePathFull, parameterList, measures, measure_scale, "Robustness_Data.csv", baseline, minvals, maxvals, incvals, PARAMVALS=NULL, output_types = c("png")) 
                    print(analysis_attrs$baseline)
                    oat_plotResultDistribution(analysis_attrs$robustFilePathFull, analysis_attrs$parameterList, analysis_attrs$measures, analysis_attrs$measureScale, input$AllResults$name, analysis_attrs$baseline, analysis_attrs$minvals, analysis_attrs$maxvals, analysis_attrs$incvals, PARAMVALS=NULL, output_types = c("png")) 
@@ -787,16 +984,18 @@ server <- function(input, output, session) {
                   print(analysis_attrs$parameterList)
                   
                   #efast_run_Analysis(eFASTFilePath, measures, parameterList, num_curves, num_samples, 1:length(measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
-                  efast_run_Analysis(paste0(analysis_attrs$eFASTFilePath, "/correctCSVStructure"), analysis_attrs$measures, analysis_attrs$parameterList, num_curves, num_samples, 1:length(analysis_attrs$measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, paste0(input$eFASTResultsFileName, ".csv"), output_types = c("png")) 
+                  efast_run_Analysis(paste0(analysis_attrs$eFASTFilePath, "/correctCSVStructure"), analysis_attrs$measures, analysis_attrs$parameterList, num_curves, num_samples, 1:length(analysis_attrs$measures), TTEST_CONF_INT = input$ttest_conf, GRAPH_FLAG=TRUE, analysis_attrs$FASTResultsFileName, output_types = c("png")) 
                   showModal(modalDialog(
                     title = "Complete",
                     "Graphs have been generated"))
                 }
-                shinyjs::enable("showGraphs") 
+                 
+                
+                 
                })
   
   output$firstChoice <- renderText({
-                          switch(input$usersAnalysisType, "Latin-Hypercube" = "Generate Summary",
+                          switch(input$usersAnalysisType, "Latin-Hypercube" = "Perform LHC Correlation Analysis",
                                                           "Robustness" = "Generate ATest Results",
                                                           "eFAST" = "Get Overall Medians")
     })
@@ -821,12 +1020,12 @@ server <- function(input, output, session) {
                  shinyjs::show("Graph")
                  if(input$changingMeasures == "A-Test Results")
                  {
-                   output$Graph <- renderImage(list(src = paste0(analysis_attrs$robustFilePathFull, "/", input$usersAnalysisInput, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE)
+                   output$Graph <- renderImage(list(src = file.path(analysis_attrs$user_dir, paste0(input$usersAnalysisInput, ".png")) , width = '100%', alt = paste("Image not found")), deleteFile = FALSE)
                  }
                  else
                  {
-                   output$Graph <- switch(input$usersAnalysisType, "Latin-Hypercube" = renderImage(list(src = paste0(analysis_attrs$LHCFilePathFull, "/", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
-                                          "Robustness" = renderImage(list(src = paste0(analysis_attrs$robustFilePathFull, "/BP_", input$usersAnalysisInput, "_", input$changingMeasures, ".png") , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
+                   output$Graph <- switch(input$usersAnalysisType, "Latin-Hypercube" = renderImage(list(src = file.path(analysis_attrs$user_dir, paste0(input$usersAnalysisInput, "_", input$changingMeasures, ".png")) , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
+                                          "Robustness" = renderImage(list(src = file.path(analysis_attrs$user_dir, paste0("/BP_", input$usersAnalysisInput, "_", input$changingMeasures, ".png")) , width = '100%', alt = paste("Image not found")), deleteFile = FALSE),
                                           "eFAST" = renderImage(list(src = paste0(analysis_attrs$eFASTFilePath, "/correctCSVStructure/", input$changingMeasures, ".png"), width = '100%', alt = paste("Image not found")), deleteFile = FALSE))
                    
                  }
@@ -842,7 +1041,7 @@ server <- function(input, output, session) {
                 shinyjs::show("selectUI")
                 shinyjs::show("changingTabs")
                 shinyjs::show("changingMeasures")
-                shinyjs::show("zipGraphs")
+                shinyjs::show("zip_analysis")
 
                 if (input$usersAnalysisType == "eFAST")
                 {
@@ -855,6 +1054,11 @@ server <- function(input, output, session) {
                 updateSelectInput(session, inputId = "changingMeasures", choices = analysis_attrs$measures)
 
              })
+ 
+ # Delete the user directory when the session ends
+  session$onSessionEnded(function() {
+     unlink(user_dir,recursive=TRUE)
+   })
 
 
 

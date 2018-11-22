@@ -366,7 +366,8 @@ server <- function(input, output, session) {
         number_of_curves = "N/A"
       }
       #write_csv(cbind(input$analysisType, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
-      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
+      # Take decimal or whole number of the myValues table as not needed in summary file
+      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(myValues$table[,1:ncol(myValues$table)-1]), data.frame(measureValues$table)), path = file) 
     }
   )
   

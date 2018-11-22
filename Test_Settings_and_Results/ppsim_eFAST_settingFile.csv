@@ -1,0 +1,7 @@
+analysis_type,number_of_samples,number_of_curves,Parameter,Min,Max,Increment,Baseline,Measures,Measure.1,Measure.2
+eFAST,65,3,stableBindProbability,0,100,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,chemokineExpressionThreshold,0.1,0.9,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,initialChemokineExpressionValue,0.1,0.5,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,maxChemokineExpressionValue,0.015,0.08,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,maxProbabilityOfAdhesion,0.1,1,NA,NA,Measures:,Velocity,Displacement
+eFAST,66,3,adhesionFactorExpressionSlope,0.25,5,NA,NA,Measures:,Velocity,Displacement

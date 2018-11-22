@@ -1,0 +1,6 @@
+analysis_type,number_of_samples,number_of_curves,Parameter,Min,Max,Increment,Baseline,Measures,Measure.1,Measure.2
+Latin-Hypercube,500,N/A,quantity,2,28,N/A,N/A,Measures:,distanceToBeacon,efficiency
+Latin-Hypercube,500,N/A,omega,15,35,N/A,N/A,Measures:,distanceToBeacon,efficiency
+Latin-Hypercube,500,N/A,cool_off_period,0,10,N/A,N/A,Measures:,distanceToBeacon,efficiency
+Latin-Hypercube,500,N/A,shadowed_avoidance_radius,0,0.15,N/A,N/A,Measures:,distanceToBeacon,efficiency
+Latin-Hypercube,500,N/A,illuminated_avoidance_radius,0.15,0.3,N/A,N/A,Measures:,distanceToBeacon,efficiency

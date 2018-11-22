@@ -1,0 +1,6 @@
+analysis_type,number_of_samples,number_of_curves,Parameter,Min,Max,Increment,Baseline,Measures,Measure.1,Measure.2
+Robustness,N/A,N/A,quantity,2,28,1,20,Measures:,distanceToBeacon,efficiency
+Robustness,N/A,N/A,omega,15,35,1,25,Measures:,distanceToBeacon,efficiency
+Robustness,N/A,N/A,cool_off_period,0,10,1,5,Measures:,distanceToBeacon,efficiency
+Robustness,N/A,N/A,shadowed_avoidance_radius,0,0.15,0.01,0.1,Measures:,distanceToBeacon,efficiency
+Robustness,N/A,N/A,illuminated_avoidance_radius,0.15,0.3,0.01,0.2,Measures:,distanceToBeacon,efficiency
