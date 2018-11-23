@@ -69,7 +69,11 @@ Once you have your parameter value sets and performed the executions, you can us
 Again to save duplication we do not detail how one should interpret each graph here, instead we refer you to the spartan package vignette that contains all the analyses used by RoboSpartan (https://cran.r-project.org/web/packages/spartan/vignettes/sensitivity_analysis.html)
 
 
+---
 
+### 5. Emulation App
+
+We have recently shown how machine learning algorithms, trained on a simulation dataset, can speed up and permit execution of intensive statsitical analyses, by predicting simulation output. RoboSpartan App 3 permits training of five machine learning algorithms from an LHC or eFAST dataset, and generation of a ensemble that makes a prediction informed by the predictions of all five, weighting each on algorithms predictive performance on the dataset. To aid demonstration of this process, in this repository there is a folder, "Test_Settings_and_Results", that contains RoboSpartan settings files and simulation execution results for all three sensitivity analyses. From RStudio, open the app.R file that is contained in the "analysis_platform" folder, again running externally as detailed for the sampling app. With the app open:
 
 
 
