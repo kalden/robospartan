@@ -4,4 +4,5 @@ eFAST,65,3,chemokineExpressionThreshold,0.1,0.9,NA,NA,Measures:,Velocity,Displac
 eFAST,65,3,initialChemokineExpressionValue,0.1,0.5,NA,NA,Measures:,Velocity,Displacement
 eFAST,65,3,maxChemokineExpressionValue,0.015,0.08,NA,NA,Measures:,Velocity,Displacement
 eFAST,65,3,maxProbabilityOfAdhesion,0.1,1,NA,NA,Measures:,Velocity,Displacement
-eFAST,66,3,adhesionFactorExpressionSlope,0.25,5,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,adhesionFactorExpressionSlope,0.25,5,NA,NA,Measures:,Velocity,Displacement
+eFAST,65,3,Dummy,0,1,NA,NA,Measures:,Velocity,Displacement

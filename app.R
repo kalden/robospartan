@@ -347,7 +347,13 @@ server <- function(input, output, session) {
       "Settings.csv"
     },
     content = function(file) { 
+      
+      # Take decimal or whole number of the myValues table as not needed in summary file
+      # We're going to modify by adding the dummy to the output, so we take a copy
+      parameter_info <- myValues$table[,1:ncol(myValues$table)-1]
+      
       analysis_type = input$analysisType
+      
       if (input$analysisType == "Robustness")
       {
         number_of_samples = "N/A"
@@ -360,14 +366,15 @@ server <- function(input, output, session) {
       if (input$analysisType == "eFAST")
       {
         number_of_curves = input$numCurves
+        parameter_info<-rbind(parameter_info,cbind("Dummy",0,1,NA,NA))
       }
       else
       {
         number_of_curves = "N/A"
       }
       #write_csv(cbind(input$analysisType, data.frame(myValues$table), data.frame(measureValues$table)), path = file) 
-      # Take decimal or whole number of the myValues table as not needed in summary file
-      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(myValues$table[,1:ncol(myValues$table)-1]), data.frame(measureValues$table)), path = file) 
+      
+      write_csv(cbind(analysis_type, number_of_samples, number_of_curves, data.frame(parameter_info), data.frame(measureValues$table)), path = file) 
     }
   )
   
