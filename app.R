@@ -10,6 +10,7 @@ library(shiny)
 library(shinyjs)
 library(DT)
 library(spartan)
+library(shinyBS)
 library(readr) #Required for wrtie_csv on MacOS
 #library(spartanDB)
 
@@ -84,8 +85,7 @@ ui <- fluidPage(
         wellPanel(id = "measuresWell",
                   h4("Measures:"),
                   textInput(inputId = "measures",
-                            label = "Choose Your Measures:",
-                            value = "NULL"),
+                            label = "Choose Your Measures:"),
                   actionButton(inputId = "addMeasure", label = "Add to Measures"),
                   actionButton(inputId = "clearMeasures", label = "Clear All Measures")
         ),
@@ -268,6 +268,11 @@ server <- function(input, output, session) {
   shinyjs::hide("settingFile")
   shinyjs::hide("wholeNumber")
   sampleCreated <- FALSE #Flag to determine whether a sample has been created
+  
+  # We're going to have a specific directory named with the date and time, incase of multiple users
+  myValues$user_dir <- file.path(getwd(),paste0("rs_sampling_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
+  # Also stored as non-reactive so can delete at the end of the session
+  user_dir<-file.path(getwd(),paste0("rs_sampling_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
   
   rv <- reactiveValues(download_flag = 0)
   
@@ -477,11 +482,11 @@ server <- function(input, output, session) {
     content = function(file) { 
       
       # We're going to have a specific directory named with the date and time, incase of multiple users
-      argos_files_directory<-file.path(getwd(),paste0("argosFiles_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
+      #argos_files_directory<-file.path(getwd(),paste0("argosFiles_",gsub(" ","_",gsub(":","_",toString(Sys.time())))))
       
       
-      if(!file.exists(argos_files_directory))
-        dir.create(argos_files_directory)
+      if(!file.exists(myValues$user_dir))
+        dir.create(myValues$user_dir)
       
       #directory <<- "/home/fgch500/robospartan/argosFiles" #Working directory
       #dir.create(file.path(input$argosDirectory, "experiments"))
@@ -494,26 +499,26 @@ server <- function(input, output, session) {
       #zipName <- input$zipName
       #print(result)
       #filesToModify <- 
-      #showModal(modalDialog(
-      #  title = "Creating ARGoS Files",
-      #  "ARGoS files are being created..."))
+      showModal(modalDialog(
+        title = "Creating ARGoS Files",
+        "ARGoS files are being created..."))
       #print(input$numExecutions)
       #print(argos_files_directory)
-      make_argos_file_from_sample(input$argosFiles$datapath, argos_files_directory, myValues$parameters, myValues$displayed_result)
+      make_argos_file_from_sample(input$argosFiles$datapath, myValues$user_dir, myValues$parameters, myValues$displayed_result)
       
       #current_wd<-getwd()
       #setwd(directory)
-      zip(zipfile = file, dir(argos_files_directory, full.names = TRUE), flags="-qjr")
+      zip(zipfile = file, dir(myValues$user_dir, full.names = TRUE), flags="-qjr")
       #showModal(modalDialog(
       #  title = "Zip File Created",
       #  "A Zip file of ARGoS files has been created at:       ", file))
       
       for(s in 1:nrow(myValues$sample)) #Remove all XML files once they've been zipped
       {
-        file.remove(file.path(argos_files_directory, paste0("argos_experiment_set_",s,".argos")))
+        file.remove(file.path(myValues$user_dir, paste0("argos_experiment_set_",s,".argos")))
       }
       # Remove the generated directory
-      unlink(argos_files_directory,recursive=TRUE, force=TRUE)
+      #unlink(argos_files_directory,recursive=TRUE, force=TRUE)
       
       # Change the wd back
       #setwd(current_wd)
@@ -1265,6 +1270,11 @@ server <- function(input, output, session) {
       h4("Parameters Declared For", input$analysisType, ":")
     }
   })
+    
+    # Delete the user directory when the session ends
+    session$onSessionEnded(function() {
+      unlink(user_dir,recursive=TRUE)
+    })
 }
 
 # Run the application 

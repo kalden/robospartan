@@ -106,8 +106,6 @@ ui <- fluidPage(
 # Define server logic required to draw ah histogram
 server <- function(input, output, session) {
   
-  jsResetCode <- "shinyjs.reset = function() {history.go(0)}" # Define the js method that resets the page
-  
   # Attributes that Finlay previously put above have been moved here, in a reactive variable
   analysis_attrs<-reactiveValues()
   
