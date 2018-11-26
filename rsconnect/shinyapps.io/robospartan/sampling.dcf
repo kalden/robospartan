@@ -5,9 +5,9 @@ account: robospartan
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 581671
-bundleId: 1716461
+bundleId: 1720480
 url: https://robospartan.shinyapps.io/sampling/
-when: 1542971074.32054
+when: 1543227762.49971
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .~lock.lhc_sample.csv#|.RData|.zip|emulating_eFAST.R|epuck_omega_algorithm.argos|psiswarm_dps.argos|readMe.md|Robustness_Analysis_Omega.R|test.R|analysis_platform/app.R|argosFilesZip/argosZIP.zip|Machine_learning_emulator_app/app.R|tableTest/app.R|eFASTfiles|Files|LHCFiles|robustnessFiles|Test_Settings_and_Results
+ignoredFiles: .RData|emulating_eFAST.R|epuck_omega_algorithm.argos|psiswarm_dps.argos|readMe.md|Robustness_Analysis_Omega.R|analysis_platform/app.R|Machine_learning_emulator_app/app.R|Test_Settings_and_Results
