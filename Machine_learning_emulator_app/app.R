@@ -74,6 +74,13 @@ ui <- fluidPage(
       wellPanel(id = "makeEnsemble",
                 h4("Generate the Emulators and Ensembles:"),
                 actionButton(inputId = "ensembles", label = "Generate Predictive Models")),
+      
+      tags$a(href="javascript:history.go(0)", 
+             popify(tags$i(class="fa fa-refresh fa-5x"),
+                    title = "Reload", 
+                    content = "Clear definitions and restart app",
+                    placement = "right")),
+      
       width = 4),
     
     # Show a plot of the generated distribution
@@ -722,6 +729,11 @@ server <- function(input, output, session) {
                    output$measures_table <- renderTable(measureValues$table, striped = TRUE, bordered = TRUE)
                    shinyjs::show("dataInput")
   }})
+  
+  # Delete the user directory when the session ends
+  session$onSessionEnded(function() {
+    unlink(user_dir,recursive=TRUE)
+  })
   
 }
 

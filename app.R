@@ -13,12 +13,20 @@ library(spartan)
 library(readr) #Required for wrtie_csv on MacOS
 #library(spartanDB)
 
+#jsResetCode <- "shinyjs.reset = function() {history.go(0)}"
+#jsCode <- "shinyjs.pageCol = function(params){$('body').css('background', params);}"
+
 # Attributes moved from here to server, as these were common across all users of the app
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
   shinyjs::useShinyjs(),
+  
+  #extendShinyjs(text = jsResetCode),
+  #extendShinyjs(text = jsCode),
+  
+  #extendShinyjs(text = jsCode, functions = c("pageCol"))
   
    # Application title
    h3("RoboSpartan Sampling: Generate Parameter Sets Using Different Sampling Techniques"),
@@ -31,7 +39,6 @@ ui <- fluidPage(
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-        
        
         wellPanel(
           
@@ -155,10 +162,19 @@ ui <- fluidPage(
         #              label = "Generate SGE Cluster Script")
        ),
       
+       tags$a(href="javascript:history.go(0)", 
+              popify(tags$i(class="fa fa-refresh fa-5x"),
+                     title = "Reload", 
+                     content = "Clear definitions and restart app",
+                     placement = "right")),
+       
       ## Database section not included in this release
       #wellPanel(
         
-      #  h4("Database:"),
+      #  h4("Clear and Restart"),
+        
+      #  actionButton(inputId = "reset", label = 'Reset App')
+        
       
       #  fileInput(inputId = "DBSettings",
       #            label = "Database Settings File:"),
@@ -179,7 +195,7 @@ ui <- fluidPage(
       #            label = 'Add Experiment to Database')
         
         
-      #),
+     # ),
       
       width = 4),
       
@@ -328,6 +344,16 @@ server <- function(input, output, session) {
                  myValues$measureCounter <- 1
                  
                })
+  
+  #observeEvent(input$reset, {
+    
+  #  showModal(modalDialog(
+  #              title = "Resetting App",
+  #              "Application will restart with all settings deleted"))
+    
+  #  #js$reset() # this should restart the app
+  #  js$pageCol(input$col)
+  #})
   
   
   # Download generated sample

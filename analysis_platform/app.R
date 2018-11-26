@@ -68,6 +68,12 @@ ui <- fluidPage(
 
          ),
         
+        tags$a(href="javascript:history.go(0)", 
+               popify(tags$i(class="fa fa-refresh fa-5x"),
+                      title = "Reload", 
+                      content = "Clear definitions and restart app",
+                      placement = "right")),
+        
       width = 5),
       
       # Show a plot of the generated distribution
