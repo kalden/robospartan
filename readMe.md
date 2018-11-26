@@ -39,7 +39,7 @@ In this repository, the file epuck_omega_algorithm.argos is the simulation that 
 
 ---
 
-### 3. Parameter Sampling App
+### 3. Parameter Sampling App (Video: https://youtu.be/22gVXjCSqxw)
 
 RoboSpartan can generate parameter value sets for three sensitivity analysis techniques, one local (that changes the value of one parameter at a time), and two global (that change all five of the above sequentially). We have not duplicated the detail of each technique here, instead we refer the reader to the vignettes for the spartan package: (https://cran.r-project.org/web/packages/spartan/vignettes/sensitivity_analysis.html)
 
@@ -55,7 +55,7 @@ Finally, bottom of the left hand panel is a section to upload and generate ARGoS
 
 ---
 
-### 4. Parameter Analysis App
+### 4. Parameter Analysis App (Videos: Robustness: https://youtu.be/AiAkW3nBTrU; Latin-Hypercube: https://youtu.be/HUdHxNnDOdg; eFAST:https://youtu.be/EMnJflrxKEc)
 
 Once you have your parameter value sets and performed the executions, you can use the second RoboSpartan app to analyse the data. To aid demonstration of this process, in this repository there is a folder, "Test_Settings_and_Results", that contains RoboSpartan settings files and simulation execution results for all three sensitivity analyses. From RStudio, open the app.R file that is contained in the "analysis_platform" folder, again running externally as detailed for the sampling app. With the app open:
 * You will need to upload a settings file created when the parameter sample was generated in the previous app. This saves you having to enter all the simulation parameter and response information again. If using the examples in the "Test_Settings_and_Results" folder: for robustness analysis upload "omega_Robustness_settingFile.csv"; for latin-hypercube upload "omega_LHC_settingFile.csv"; for eFAST upload "omega_eFAST_settingFile.csv"
@@ -70,7 +70,7 @@ Again to save duplication we do not detail how one should interpret each graph h
 
 ---
 
-### 5. Emulation App
+### 5. Emulation App (Video: https://youtu.be/kYpWT-2m8iA)
 
 We have recently shown how machine learning algorithms, trained on a simulation dataset, can speed up and permit execution of intensive statsitical analyses, by predicting simulation output. RoboSpartan App 3 permits training of five machine learning algorithms from an LHC or eFAST dataset, and generation of a ensemble that makes a prediction informed by the predictions of all five, weighting each on algorithms predictive performance on the dataset. For a full description of this demonstration, see https://ieeexplore.ieee.org/document/8374844. To aid demonstration of this process in RoboSpartan, in this repository there is a folder, "Test_Settings_and_Results", that contains RoboSpartan settings files and simulation execution results. From RStudio, open the app.R file that is contained in the "Machine_learning_emulator_app" folder, again running externally as detailed for the sampling app. With the app open:
 * You will need to upload a settings file created when the parameter sample was generated in App 1. This saves you having to enter all the simulation parameter and response information again. If using the examples in the "Test_Settings_and_Results" folder, you can upload "omega_LHC_settingFile.csv"
