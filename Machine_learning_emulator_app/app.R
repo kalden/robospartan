@@ -73,7 +73,7 @@ ui <- fluidPage(
       
       wellPanel(id = "makeEnsemble",
                 h4("Generate the Emulators and Ensembles:"),
-                actionButton(inputId = "ensembles", label = "Ensembles")),
+                actionButton(inputId = "ensembles", label = "Generate Predictive Models")),
       width = 4),
     
     # Show a plot of the generated distribution
