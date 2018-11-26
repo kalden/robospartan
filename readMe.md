@@ -41,7 +41,7 @@ In this repository, the file epuck_omega_algorithm.argos is the simulation that 
 
 ### 3. Parameter Sampling App (Video: https://youtu.be/22gVXjCSqxw)
 
-RoboSpartan can generate parameter value sets for three sensitivity analysis techniques, one local (that changes the value of one parameter at a time), and two global (that change all five of the above sequentially). We have not duplicated the detail of each technique here, instead we refer the reader to the vignettes for the spartan package: (https://cran.r-project.org/web/packages/spartan/vignettes/sensitivity_analysis.html)
+RoboSpartan can generate parameter value sets for three sensitivity analysis techniques, one local (that changes the value of one parameter at a time), and two global (that change all five of the above simultaneously). We have not duplicated the detail of each technique here, instead we refer the reader to the vignettes for the spartan package: (https://cran.r-project.org/web/packages/spartan/vignettes/sensitivity_analysis.html)
 
 If running locally, in the main roboSpartan folder, open app.R in RStudio. On the toolbar above the file editor should be a button labelled "Run App". Click the down arrow beside "Run App", and choose "Run External". Then press "Run App", and the parameter sampling app will open in a web browser. Alternatively you can run this app online at https://robospartan.shinyapps.io/sampling/. In this app you can:
 * Select the analysis technique, for which you are generating samples, from the drop down box
