@@ -11,8 +11,7 @@ In the below, we examine the sampling and analysis of five parameters that influ
 We would suggest that the initial version of this platform is run in RStudio. You should be able to download or fork this repository, then open the project in RStudio. In addition, you will require the following R packages:
 * spartan (version 3.0.2)
 * packages spartan is dependent upon: lhs, gplots, XML, plotrix, mlegp, ggplot2, neuralnet, psych, mco, randomForest, e1071
-* shiny
-* shinyjs
+* shiny, shinyjs, and shinyBS
 * shinycssloaders
 * xml2
 * DT
@@ -73,7 +72,16 @@ Again to save duplication we do not detail how one should interpret each graph h
 
 ### 5. Emulation App
 
-We have recently shown how machine learning algorithms, trained on a simulation dataset, can speed up and permit execution of intensive statsitical analyses, by predicting simulation output. RoboSpartan App 3 permits training of five machine learning algorithms from an LHC or eFAST dataset, and generation of a ensemble that makes a prediction informed by the predictions of all five, weighting each on algorithms predictive performance on the dataset. To aid demonstration of this process, in this repository there is a folder, "Test_Settings_and_Results", that contains RoboSpartan settings files and simulation execution results for all three sensitivity analyses. From RStudio, open the app.R file that is contained in the "analysis_platform" folder, again running externally as detailed for the sampling app. With the app open:
+We have recently shown how machine learning algorithms, trained on a simulation dataset, can speed up and permit execution of intensive statsitical analyses, by predicting simulation output. RoboSpartan App 3 permits training of five machine learning algorithms from an LHC or eFAST dataset, and generation of a ensemble that makes a prediction informed by the predictions of all five, weighting each on algorithms predictive performance on the dataset. For a full description of this demonstration, see https://ieeexplore.ieee.org/document/8374844. To aid demonstration of this process in RoboSpartan, in this repository there is a folder, "Test_Settings_and_Results", that contains RoboSpartan settings files and simulation execution results. From RStudio, open the app.R file that is contained in the "Machine_learning_emulator_app" folder, again running externally as detailed for the sampling app. With the app open:
+* You will need to upload a settings file created when the parameter sample was generated in App 1. This saves you having to enter all the simulation parameter and response information again. If using the examples in the "Test_Settings_and_Results" folder, you can upload "omega_LHC_settingFile.csv"
+* You can then upload a CSV file of data to train the machine learning algorithms on. This should consist of parameter values in columns, followed by the simulation results under those conditions. If using the examples, upload "LHC_Summary_for_ML.csv". This was created by App 2, summarising the replicate executions of each parameter set into one summary set for each set. As an LHC attempts to cover the complete parameter space, this should be a good set on which to train the emulators
+* This set is partitioned into training, test, and validation sets. The next box that appears permits you to set the percentages used when the data is split.
+* The set of buttons below allows you to specify which machine learning algorithms you want to train. Once you have selected two, you will be able to select Ensemble, that will combine multiple algorithms into one predictice tool. If you select neural network, there are additional settings to add. As spartan uses the neuralnet package, you will need to specify the list of potential network structures that you want to examine, and spartan will choose the one that best predicts the data (using 10-fold cross validation). Let's assume you have five parameters and two outputs. The assumption is that the nodes in the hidden layer will be less than the number of parameter inputs. So you may wish to examine one hidden layer of 4 nodes, or maybe two hidden layers of 4 then 3 nodes, or three of 4,4 and 3 nodes, etc. To specify each in RoboSpartan, you would enter each into the network structure box. For more than one hidden layer, separare the nodes with commas (e.g. 4,3). Future versions of spartan/RoboSpartan will automate this. Note that, in our experience, Gaussian Process can take a significant amount of time to generate.
+* With the settings complete, press the "Generate Predictive Models" button. A dialog will inform you that these are in process of being generated.
+* Once complete, you can examine the predictive accuracy of each technique using the plots in the main panel, and can download all the results and produced emulators/ensemble as a zip file.
+
+These predictive models can then be used in place of the simulator to perform sensitivity analyses and approximate bayesian computation, and explore the parameter space using a GA. A description of how to do just that can be seen here: https://cran.r-project.org/web/packages/spartan/vignettes/emulation_ensembles.html
+
 
 
 
