@@ -39,6 +39,7 @@ make_argos_file_from_sample<-function(argos_file_path, output_folder, parameters
 {
   for(s in 1:nrow(generated_sample))
   {
+    
     argos_file <- read_xml(argos_file_path)
     child_nodes<<-xml_children(argos_file)
       

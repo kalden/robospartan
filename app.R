@@ -504,7 +504,11 @@ server <- function(input, output, session) {
         "ARGoS files are being created..."))
       #print(input$numExecutions)
       #print(argos_files_directory)
+      print(input$argosFiles$datapath)
+      print(myValues$user_dir)
       make_argos_file_from_sample(input$argosFiles$datapath, myValues$user_dir, myValues$parameters, myValues$displayed_result)
+      
+      print("HERE!")
       
       #current_wd<-getwd()
       #setwd(directory)
@@ -513,10 +517,10 @@ server <- function(input, output, session) {
       #  title = "Zip File Created",
       #  "A Zip file of ARGoS files has been created at:       ", file))
       
-      for(s in 1:nrow(myValues$sample)) #Remove all XML files once they've been zipped
-      {
-        file.remove(file.path(myValues$user_dir, paste0("argos_experiment_set_",s,".argos")))
-      }
+      #for(s in 1:nrow(myValues$sample)) #Remove all XML files once they've been zipped
+      #{
+      #  file.remove(file.path(myValues$user_dir, paste0("argos_experiment_set_",s,".argos")))
+      #}
       # Remove the generated directory
       #unlink(argos_files_directory,recursive=TRUE, force=TRUE)
       
